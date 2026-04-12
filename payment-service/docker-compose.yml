@@ -1,0 +1,13 @@
+name: booking-order-app # change this to your app name
+services:
+  payment-service: # change this to your service name
+    container_name: payment-service # change this to your service name
+#    image: ralsaditya/payment-service # change this to your image name
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003" # change this to your port
+    env_file:
+      - .env
