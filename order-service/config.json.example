@@ -1,0 +1,45 @@
+{
+  "port": 8004,
+  "appName": "order-service",
+  "appEnv": "local",
+  "signatureKey": "",
+  "database": {
+    "host": "192.168.1.210",
+    "port": 5432,
+    "name": "",
+    "username": "root",
+    "password": "",
+    "maxOpenConnection": 10,
+    "maxLifetimeConnection": 10,
+    "maxIdleConnection": 10,
+    "maxIdleTime": 10
+  },
+  "rateLimiterMaxRequest": 1000,
+  "rateLimiterTimeSecond": 60,
+  "internalService": {
+    "user": {
+      "host": "http://192.168.1.210:8001",
+      "signatureKey": ""
+    },
+    "field": {
+      "host": "http://192.168.1.210:8002",
+      "signatureKey": ""
+    },
+    "payment": {
+      "host": "http://192.168.1.210:8003",
+      "signatureKey": ""
+    }
+  },
+  "kafka": {
+    "brokers": [
+      "192.168.1.210:9092"
+    ],
+    "timeoutInMs": 100,
+    "maxRetry": 3,
+    "maxWaitTimeInMs": 100,
+    "maxProcessingTimeInMs":200,
+    "backoffTimeInMs": 100,
+    "groupID": "",
+    "topic": "payment-service-callback"
+  }
+}

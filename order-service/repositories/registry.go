@@ -1,0 +1,39 @@
+package repositories
+
+import (
+	"gorm.io/gorm"
+	orderRepo "order-service/repositories/order"
+	orderFieldRepo "order-service/repositories/order_field"
+	orderHistoryRepo "order-service/repositories/order_history"
+)
+
+func NewRepositoryRegistry(db *gorm.DB) IRepositoryRegistry {
+	return &Registry{db: db}
+}
+
+type Registry struct {
+	db *gorm.DB
+}
+
+func (r *Registry) GetTx() *gorm.DB {
+	return r.db
+}
+
+func (r *Registry) GetOrder() orderRepo.IOrderRepository {
+	return orderRepo.NewOrderRepository(r.db)
+}
+
+func (r *Registry) GetOrderHistory() orderHistoryRepo.IOrderHistoryRepository {
+	return orderHistoryRepo.NewOrderHistoryRepository(r.db)
+}
+
+func (r *Registry) GetOrderField() orderFieldRepo.IOrderFieldRepository {
+	return orderFieldRepo.NewOrderFieldRepository(r.db)
+}
+
+type IRepositoryRegistry interface {
+	GetOrder() orderRepo.IOrderRepository
+	GetOrderHistory() orderHistoryRepo.IOrderHistoryRepository
+	GetOrderField() orderFieldRepo.IOrderFieldRepository
+	GetTx() *gorm.DB
+}
