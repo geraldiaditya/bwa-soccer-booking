@@ -1,0 +1,22 @@
+# IDE
+.idea/
+.vscode/
+.fleet/
+
+# Build output
+bin/
+*/bin/
+
+# Dependencies
+vendor/
+*/vendor/
+
+# Air hot reload
+tmp/
+*/tmp/
+
+# Secrets — copy from *.example to configure locally
+.env
+*/.env
+config.json
+*/config.json

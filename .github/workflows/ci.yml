@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  user-service:
+    name: user-service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: user-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: user-service/go.mod
+          cache-dependency-path: user-service/go.sum
+      - run: go mod download
+      - run: go build ./...
+      - run: go test ./... -v -race
+
+  field-service:
+    name: field-service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: field-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: field-service/go.mod
+          cache-dependency-path: field-service/go.sum
+      - run: go mod download
+      - run: go build ./...
+
+  order-service:
+    name: order-service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: order-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: order-service/go.mod
+          cache-dependency-path: order-service/go.sum
+      - run: go mod download
+      - run: go build ./...
+
+  payment-service:
+    name: payment-service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payment-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: payment-service/go.mod
+          cache-dependency-path: payment-service/go.sum
+      - run: go mod download
+      - run: go build ./...
