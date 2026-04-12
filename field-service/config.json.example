@@ -1,0 +1,37 @@
+{
+    "port": 8002,
+    "appName": "field-service",
+    "appEnv": "local",
+    "signatureKey": "",
+    "database": {
+      "host": "",
+      "port": 5432,
+      "name": "",
+      "username": "",
+      "password": "",
+      "maxOpenConnection": 10,
+      "maxLifetimeConnection": 10,
+      "maxIdleConnection": 10,
+      "maxIdleTime": 10
+    },
+    "rateLimiterMaxRequest": 1000,
+    "rateLimiterTimeSecond": 60,
+    "internalService": {
+      "user": {
+        "host": "",
+        "signatureKey": ""
+      }
+    },
+    "gcsType": "",
+    "gcsProjectID": "",
+    "gcsPrivateKeyID": "",
+    "gcsPrivateKey": "",
+    "gcsClientEmail": "",
+    "gcsClientID": "",
+    "gcsAuthURI": "",
+    "gcsTokenURI": "",
+    "gcsAuthProviderX509CertURL": "",
+    "gcsClientX509CertURL": "",
+    "gcsUniverseDomain": "",
+    "gcsBucketName": ""
+  }
