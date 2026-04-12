@@ -1,0 +1,10 @@
+.idea
+bin
+vendor/
+
+.env
+config.json
+
+.fleet
+.vscode
+tmp/
