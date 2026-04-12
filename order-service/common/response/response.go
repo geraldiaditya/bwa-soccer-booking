@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	errConstant "order-service/constants/error"
-	"payment-service/constants"
+	"order-service/constants"
 )
 
 type Response struct {

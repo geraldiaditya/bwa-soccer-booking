@@ -26,6 +26,7 @@ func (o *OrderHistoryRepository) Create(ctx context.Context, tx *gorm.DB, reques
 	if err != nil {
 		return errWrap.WrapError(errConst.ErrSQLError)
 	}
+	return nil
 }
 
 type IOrderHistoryRepository interface {
