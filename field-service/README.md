@@ -1,52 +1,73 @@
-<h3>Field Service</h3>
+# Field Service
 
-<h3>Description</h3>
+Manages soccer field listings, availability schedules, and time slot configuration. Calls user-service internally to validate request signatures.
 
-<p>This repository will be used to manage field and schedule time</p>
+**Port:** `8002`
 
-<h3>Directory Structure</h3>
+## Endpoints
 
-```
-field-service
-    L client
-    L cmd                            → Contains the main entry point or initial configuration of the application
-    L common                         → Stores common functions used throughout the application
-    L config                         → Contains application configurations such as environment variables and other settings
-    L constants                      → Stores global constant values used across the application
-    L controllers                    → Scripts for populating initial (seed) data into the database
-    L domain                         → The application's domain module containing core domain elements
-        L dto                        → Data Transfer Objects, used to define the structure of transferred data
-        L models                     → Object models representing the application's or database's data structure
-    L middlewares                    → Contains middleware for processing requests/responses before or after reaching the controller
-    L repositories                   → Contains data access logic for interacting with the database
-    L routes                         → Contains API route definitions
-    L services                       → Stores the application's core business logic
-```
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/fields` | JWT (admin) | Create field |
+| GET | `/api/v1/fields` | — | List all fields |
+| GET | `/api/v1/fields/:uuid` | — | Get field detail |
+| PUT | `/api/v1/fields/:uuid` | JWT (admin) | Update field |
+| DELETE | `/api/v1/fields/:uuid` | JWT (admin) | Delete field |
+| POST | `/api/v1/field-schedules` | JWT (admin) | Create schedule |
+| GET | `/api/v1/field-schedules` | — | List schedules |
+| GET | `/api/v1/field-schedules/:uuid` | Signature | Internal: get schedule |
 
-## How to setup
+## Directory Structure
 
 ```
-- Clone this repository
-- go mod tidy
-- copy .env.example to .env (if you want to run with consul)
-- copy .config.json.example to .config.json
+field-service/
+├── cmd/              # CLI entrypoint (serve, migrate, seed)
+├── clients/          # HTTP client for user-service
+├── config/           # App config + DB connection
+├── controllers/      # HTTP handlers (field, field_schedule)
+├── services/         # Business logic
+├── repositories/     # Data access (GORM)
+├── domain/
+│   ├── models/       # GORM models (Field, FieldSchedule)
+│   └── dto/          # Request/response structs
+├── middlewares/      # JWT auth, RBAC, HMAC signature
+├── routes/           # Route definitions
+└── docs/             # Generated Swagger docs
 ```
 
-## How to run
+## Setup
 
 ```bash
-make watch-prepare (only for the first time or when you add new dependency)
-make watch
+cp config.json.example config.json   # fill in DB credentials & service keys
+go mod tidy
 ```
 
-## How to run with docker
+## Run
 
 ```bash
-docker-compose up -d --build --force-recreate
+make watch-prepare   # install Air (first time only)
+make watch           # run with hot reload
 ```
 
-## How to build
+## Docker
+
+```bash
+docker-compose up -d --build
+```
+
+## Database
+
+```bash
+./field-service migrate
+./field-service seed
+```
+
+## Build
+
 ```bash
 make build
 ```
 
+## API Docs
+
+Swagger UI: http://localhost:8002/swagger/index.html

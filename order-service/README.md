@@ -1,52 +1,77 @@
-<h3>Order Service</h3>
+# Order Service
 
-<h3>Description</h3>
+Processes field booking orders. Calls user-service and field-service to validate bookings, then publishes order events to Kafka. Consumes payment callback events from Kafka to update order status.
 
-<p>This repository will be used to manage order service</p>
+**Port:** `8003`
 
-<h3>Directory Structure</h3>
+## Endpoints
 
-```
-order-service
-    L client
-    L cmd                            → Contains the main entry point or initial configuration of the application
-    L common                         → Stores common functions used throughout the application
-    L config                         → Contains application configurations such as environment variables and other settings
-    L constants                      → Stores global constant values used across the application
-    L controllers                    → Scripts for populating initial (seed) data into the database
-    L domain                         → The application's domain module containing core domain elements
-        L dto                        → Data Transfer Objects, used to define the structure of transferred data
-        L models                     → Object models representing the application's or database's data structure
-    L middlewares                    → Contains middleware for processing requests/responses before or after reaching the controller
-    L repositories                   → Contains data access logic for interacting with the database
-    L routes                         → Contains API route definitions
-    L services                       → Stores the application's core business logic
-```
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/orders` | JWT | Create order |
+| GET | `/api/v1/orders` | JWT | List my orders |
+| GET | `/api/v1/orders/:uuid` | JWT | Get order detail |
 
-## How to setup
+## Event Flow
 
 ```
-- Clone this repository
-- go mod tidy
-- copy .env.example to .env (if you want to run with consul)
-- copy .config.json.example to .config.json
+order-service  ──[order.created]──►  Kafka  ──►  payment-service
+payment-service ──[payment.callback]──►  Kafka  ──►  order-service
 ```
 
-## How to run
+## Directory Structure
+
+```
+order-service/
+├── cmd/              # CLI entrypoint (serve, migrate, seed)
+├── clients/          # HTTP clients for user-service & field-service
+├── config/           # App config + DB + Kafka connection
+├── controllers/
+│   ├── http/         # HTTP handlers
+│   └── kafka/        # Kafka consumer handlers
+├── services/         # Business logic
+├── repositories/     # Data access (GORM)
+├── domain/
+│   ├── models/       # GORM models (Order)
+│   └── dto/          # Request/response structs
+├── middlewares/      # JWT auth, RBAC, HMAC signature
+├── routes/           # Route definitions
+└── docs/             # Generated Swagger docs
+```
+
+## Setup
 
 ```bash
-make watch-prepare (only for the first order or when you add new dependency)
-make watch
+cp config.json.example config.json   # fill in DB credentials & service keys
+go mod tidy
 ```
 
-## How to run with docker
+## Run
 
 ```bash
-docker-compose up -d --build --force-recreate
+make watch-prepare   # install Air (first time only)
+make watch           # run with hot reload
 ```
 
-## How to build
+## Docker
+
+```bash
+docker-compose up -d --build
+```
+
+## Database
+
+```bash
+./order-service migrate
+./order-service seed
+```
+
+## Build
+
 ```bash
 make build
 ```
 
+## API Docs
+
+Swagger UI: http://localhost:8003/swagger/index.html

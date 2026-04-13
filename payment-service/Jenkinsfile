@@ -54,7 +54,7 @@ pipeline {
     stage('Checkout Code') {
       steps {
         script {
-          def repoUrl = 'https://github.com/rals-dev/rs-payment-service.git'
+          def repoUrl = 'https://github.com/geraldiaditya/bwa-soccer-booking.git'
 
           checkout([$class: 'GitSCM',
             branches: [
@@ -107,7 +107,7 @@ pipeline {
           sh """
           git config --global user.name 'Jenkins CI'
           git config --global user.email 'jenkins@company.com'
-          git remote set-url origin https://${GITHUB_CREDENTIALS_USR}:${GITHUB_CREDENTIALS_PSW}@git@github.com:rals-dev/rs-payment-service.git
+          git remote set-url origin https://${GITHUB_CREDENTIALS_USR}:${GITHUB_CREDENTIALS_PSW}@github.com/geraldiaditya/bwa-soccer-booking.git
           git add docker-compose.yaml
           git commit -m 'Update image version to ${TARGET_BRANCH}-${currentBuild.number} [skip ci]' || echo 'No changes to commit'
           git pull origin ${TARGET_BRANCH} --rebase
@@ -120,7 +120,7 @@ pipeline {
     stage('Deploy to Remote Server') {
       steps {
         script {
-          def targetDir = "/home/ralsaditya/rals-soccer/rs-payment-service"
+          def targetDir = "/home/geraldiaditya/bwa-soccer-booking/payment-service"
           def sshCommandToServer = """
           ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${USERNAME}@${HOST} '
             if [ -d "${targetDir}/.git" ]; then
@@ -129,7 +129,7 @@ pipeline {
                 git pull origin "${TARGET_BRANCH}"
             else
                 echo "Directory does not exist. Cloning repository."
-                git clone -b "${TARGET_BRANCH}" git@github.com:rals-dev/rs-payment-service.git "${targetDir}"
+                git clone -b "${TARGET_BRANCH}" https://github.com/geraldiaditya/bwa-soccer-booking.git "${targetDir}"
                 cd "${targetDir}"
             fi
 

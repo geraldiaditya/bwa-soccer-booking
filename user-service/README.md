@@ -1,53 +1,74 @@
-<h3>User Service</h3>
+# User Service
 
-<h3>Description</h3>
+Handles user registration, authentication, and profile management. Issues JWT tokens consumed by all other services.
 
-<p>This repository will be used to manage user and auth</p>
+**Port:** `8001`
 
-<h3>Directory Structure</h3>
+## Endpoints
 
-```
-user-service
-    L cmd                            → Contains the main entry point or initial configuration of the application
-    L common                         → Stores common functions used throughout the application
-    L config                         → Contains application configurations such as environment variables and other settings
-    L constants                      → Stores global constant values used across the application
-    L controllers                    → Manages control logic for handling HTTP requests
-    L database                       → Contains files related to database management
-        L seeders                    → Scripts for populating initial (seed) data into the database
-    L domain                         → The application's domain module containing core domain elements
-        L dto                        → Data Transfer Objects, used to define the structure of transferred data
-        L models                     → Object models representing the application's or database's data structure
-    L middlewares                    → Contains middleware for processing requests/responses before or after reaching the controller
-    L repositories                   → Contains data access logic for interacting with the database
-    L routes                         → Contains API route definitions
-    L services                       → Stores the application's core business logic
-```
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/users/register` | — | Register new user |
+| POST | `/api/v1/users/login` | — | Login, returns JWT |
+| GET | `/api/v1/users/me` | JWT | Get logged-in user |
+| GET | `/api/v1/users/:uuid` | Signature | Internal: get user by UUID |
 
-## How to setup
+## Directory Structure
 
 ```
-- Clone this repository
-- go mod tidy
-- copy .env.example to .env (if you want to run with consul)
-- copy .config.json.example to .config.json
+user-service/
+├── cmd/              # CLI entrypoint (serve, migrate, seed)
+├── config/           # App config + DB connection
+├── controllers/      # HTTP handlers
+├── services/         # Business logic
+├── repositories/     # Data access (GORM)
+├── domain/
+│   ├── models/       # GORM models (User, Role)
+│   └── dto/          # Request/response structs
+├── middlewares/      # JWT auth, RBAC, rate limiter
+├── routes/           # Route definitions
+└── docs/             # Generated Swagger docs
 ```
 
-## How to run
+## Setup
 
 ```bash
-make watch-prepare (only for the first time or when you add new dependency)
-make watch
+cp config.json.example config.json   # fill in DB credentials & JWT secret
+go mod tidy
 ```
 
-## How to run with docker
+## Run
 
 ```bash
-docker-compose up -d --build --force-recreate
+make watch-prepare   # install Air (first time only)
+make watch           # run with hot reload
 ```
 
-## How to build
+## Docker
+
+```bash
+docker-compose up -d --build
+```
+
+## Database
+
+```bash
+./user-service migrate
+./user-service seed
+```
+
+## Build
+
 ```bash
 make build
 ```
 
+## API Docs
+
+Swagger UI: http://localhost:8001/swagger/index.html
+
+## Test
+
+```bash
+make test
+```
