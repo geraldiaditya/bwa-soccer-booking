@@ -1,0 +1,547 @@
+basePath: /api/v1
+definitions:
+  dto.FieldScheduleRequest:
+    properties:
+      date:
+        type: string
+      fieldId:
+        type: string
+      timeIDs:
+        items:
+          type: string
+        type: array
+    required:
+    - date
+    - fieldId
+    - timeIDs
+    type: object
+  dto.GenerateFieldScheduleForOneMonthRequest:
+    properties:
+      fieldId:
+        type: string
+    required:
+    - fieldId
+    type: object
+  dto.TimeRequest:
+    properties:
+      endTime:
+        type: string
+      startTime:
+        type: string
+    required:
+    - endTime
+    - startTime
+    type: object
+  dto.UpdateFieldScheduleRequest:
+    properties:
+      date:
+        type: string
+      timeID:
+        type: string
+    required:
+    - date
+    - timeID
+    type: object
+  dto.UpdateStatusFieldScheduleRequest:
+    properties:
+      fieldScheduleIDs:
+        items:
+          type: string
+        type: array
+    required:
+    - fieldScheduleIDs
+    type: object
+  response.Response:
+    properties:
+      data: {}
+      message:
+        type: string
+      requestId:
+        type: string
+      status:
+        type: string
+      token:
+        type: string
+    type: object
+host: localhost:8002
+info:
+  contact: {}
+  description: Microservice for managing soccer fields and schedules.
+  title: Field Service API
+  version: "1.0"
+paths:
+  /field-schedules:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        required: true
+        type: integer
+      - default: 10
+        description: Limit per page
+        in: query
+        name: limit
+        required: true
+        type: integer
+      - description: Sort column
+        in: query
+        name: sortColumn
+        type: string
+      - description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get all field schedules with pagination
+      tags:
+      - FieldSchedule
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Schedule Request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.FieldScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Create a field schedule
+      tags:
+      - FieldSchedule
+  /field-schedules/{uuid}:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Schedule UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Delete a field schedule
+      tags:
+      - FieldSchedule
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Schedule UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get field schedule by UUID
+      tags:
+      - FieldSchedule
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Schedule UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      - description: Update Request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateFieldScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Update a field schedule
+      tags:
+      - FieldSchedule
+  /field-schedules/field/{uuid}:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Field UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get field schedules by field ID and date
+      tags:
+      - FieldSchedule
+  /field-schedules/generate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Generate Request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GenerateFieldScheduleForOneMonthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Generate schedules for one month
+      tags:
+      - FieldSchedule
+  /field-schedules/status:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Status Update Request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateStatusFieldScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Update schedule status
+      tags:
+      - FieldSchedule
+  /fields:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        required: true
+        type: integer
+      - default: 10
+        description: Limit per page
+        in: query
+        name: limit
+        required: true
+        type: integer
+      - description: Sort column
+        in: query
+        name: sortColumn
+        type: string
+      - description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get all fields with pagination
+      tags:
+      - Field
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Field Name
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: Field Code
+        in: formData
+        name: code
+        required: true
+        type: string
+      - description: Price Per Hour
+        in: formData
+        name: pricePerHour
+        required: true
+        type: integer
+      - description: Field Images
+        in: formData
+        name: images
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Create a new field
+      tags:
+      - Field
+  /fields/{uuid}:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Field UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Delete a field
+      tags:
+      - Field
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Field UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get field by UUID
+      tags:
+      - Field
+    put:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Field UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      - description: Field Name
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: Field Code
+        in: formData
+        name: code
+        required: true
+        type: string
+      - description: Price Per Hour
+        in: formData
+        name: pricePerHour
+        required: true
+        type: integer
+      - description: Field Images
+        in: formData
+        name: images
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Update a field
+      tags:
+      - Field
+  /fields/all:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get all fields without pagination
+      tags:
+      - Field
+  /times:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get all time slots
+      tags:
+      - Time
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Time Request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TimeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Create a time slot
+      tags:
+      - Time
+  /times/{uuid}:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Time UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Get time slot by UUID
+      tags:
+      - Time
+swagger: "2.0"
