@@ -8,7 +8,7 @@ import (
 
 type FieldScheduleRequest struct {
 	FieldID string   `json:"fieldId" validate:"required"`
-	Date    string   `json:"date" validate:"required"`
+	Date    string   `json:"date" validate:"required,datetime=2006-01-02"`
 	TimeIDs []string `json:"timeIDs" validate:"required"`
 }
 
@@ -32,8 +32,8 @@ type FieldScheduleResponse struct {
 	Date         string                            `json:"date"`
 	Status       constants.FieldScheduleStatusName `json:"status"`
 	Time         string                            `json:"time"`
-	CreateAt     *time.Time                        `json:"createAt"`
-	UpdateAt     *time.Time                        `json:"updateAt"`
+	CreatedAt    *time.Time                        `json:"createdAt"`
+	UpdatedAt    *time.Time                        `json:"updatedAt"`
 }
 
 type FieldScheduleForBookingResponse struct {
@@ -45,12 +45,12 @@ type FieldScheduleForBookingResponse struct {
 }
 
 type FieldScheduleRequestParam struct {
-	Page       int     `form:"page" validate:"required"`
-	Limit      int     `form:"limit" validate:"required"`
-	SortColumn *string `form:"sortColumn"`
-	SortOrder  *string `form:"sortOrder"`
+	Page       int     `form:"page" validate:"required,min=1"`
+	Limit      int     `form:"limit" validate:"required,min=1,max=100"`
+	SortColumn *string `form:"sortColumn" validate:"omitempty,oneof=created_at status date"`
+	SortOrder  *string `form:"sortOrder" validate:"omitempty,oneof=asc desc"`
 }
 
 type FieldScheduleByFieldIDAndDateRequestParam struct {
-	Date string `form:"date" validate:"required"`
+	Date string `form:"date" validate:"required,datetime=2006-01-02"`
 }

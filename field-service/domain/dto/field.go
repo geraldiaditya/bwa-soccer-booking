@@ -7,16 +7,16 @@ import (
 )
 
 type FieldRequest struct {
-	Name         string                 `form:"name" validate:"required"`
-	Code         string                 `form:"code" validate:"required"`
-	PricePerHour int                    `form:"pricePerHour" validate:"required"`
+	Name         string                 `form:"name" validate:"required,min=3,max=100"`
+	Code         string                 `form:"code" validate:"required,max=15"`
+	PricePerHour int                    `form:"pricePerHour" validate:"required,gt=0"`
 	Images       []multipart.FileHeader `form:"images" validate:"required"`
 }
 
 type UpdateFieldRequest struct {
-	Name         string                 `form:"name" validate:"required"`
-	Code         string                 `form:"code" validate:"required"`
-	PricePerHour int                    `form:"pricePerHour" validate:"required"`
+	Name         string                 `form:"name" validate:"required,min=3,max=100"`
+	Code         string                 `form:"code" validate:"required,max=15"`
+	PricePerHour int                    `form:"pricePerHour" validate:"required,gt=0"`
 	Images       []multipart.FileHeader `form:"images"`
 }
 
@@ -26,8 +26,8 @@ type FieldResponse struct {
 	Name         string     `json:"name"`
 	PricePerHour int        `json:"pricePerHour"`
 	Images       []string   `json:"images"`
-	CreateAt     *time.Time `json:"createAt"`
-	UpdateAt     *time.Time `json:"updateAt"`
+	CreatedAt    *time.Time `json:"createdAt"`
+	UpdatedAt    *time.Time `json:"updatedAt"`
 }
 
 type FieldDetailResponse struct {
@@ -35,13 +35,13 @@ type FieldDetailResponse struct {
 	Name         string     `json:"name"`
 	PricePerHour int        `json:"pricePerHour"`
 	Images       []string   `json:"images"`
-	CreateAt     *time.Time `json:"createAt"`
-	UpdateAt     *time.Time `json:"updateAt"`
+	CreatedAt    *time.Time `json:"createdAt"`
+	UpdatedAt    *time.Time `json:"updatedAt"`
 }
 
 type FieldRequestParam struct {
-	Page       int     `form:"page" validate:"required"`
-	Limit      int     `form:"limit" validate:"required"`
-	SortColumn *string `form:"sortColumn"`
-	SortOrder  *string `form:"sortOrder"`
+	Page       int     `form:"page" validate:"required,min=1"`
+	Limit      int     `form:"limit" validate:"required,min=1,max=100"`
+	SortColumn *string `form:"sortColumn" validate:"omitempty,oneof=created_at price_per_hour name"`
+	SortOrder  *string `form:"sortOrder" validate:"omitempty,oneof=asc desc"`
 }
