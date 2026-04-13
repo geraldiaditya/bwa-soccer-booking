@@ -9,13 +9,13 @@ import (
 
 type Field struct {
 	ID            uint           `gorm:"primaryKey;autoIncrement"`
-	UUID          uuid.UUID      `gorm:"type:uuid;not null"`
+	UUID          uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null"`
 	Code          string         `gorm:"type:varchar(15);not null"`
 	Name          string         `gorm:"type:varchar(100);not null"`
 	PricePerHour  int            `gorm:"type:int;not null"`
 	Images        pq.StringArray `gorm:"type:text[];not null"`
-	CreateAt      *time.Time     `gorm:"autoCreateTime"`
-	UpdateAt      *time.Time     `gorm:"autoUpdateTime"`
+	CreatedAt     *time.Time
+	UpdatedAt     *time.Time
 	DeletedAt     gorm.DeletedAt
 	FieldSchedule []FieldSchedule `gorm:"foreignKey:field_id;references:id;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }

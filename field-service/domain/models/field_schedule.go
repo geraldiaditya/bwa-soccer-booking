@@ -8,10 +8,10 @@ import (
 
 type FieldSchedule struct {
 	ID        uint                          `gorm:"primaryKey;autoIncrement"`
-	UUID      uuid.UUID                     `gorm:"type:uuid;not null"`
-	FieldID   uint                          `gorm:"type:int;not null"`
+	UUID      uuid.UUID                     `gorm:"type:uuid;uniqueIndex;not null"`
+	FieldID   uint                          `gorm:"type:int;index:idx_field_schedule_lookup;not null"`
 	TimeID    uint                          `gorm:"type:int;not null"`
-	Date      time.Time                     `gorm:"type:date;not null"`
+	Date      time.Time                     `gorm:"type:date;index:idx_field_schedule_lookup;not null"`
 	Status    constants.FieldScheduleStatus `gorm:"type:int;not null"`
 	CreatedAt *time.Time
 	UpdatedAt *time.Time

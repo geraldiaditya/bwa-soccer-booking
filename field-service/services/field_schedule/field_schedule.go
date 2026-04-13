@@ -49,8 +49,8 @@ func (f *FieldScheduleService) GetAllWithPagination(
 			Date:         schedule.Date.Format("2006-01-02"),
 			Status:       schedule.Status.GetStatusString(),
 			Time:         fmt.Sprintf("%s - %s", schedule.Time.StartTime, schedule.Time.EndTime),
-			CreateAt:     schedule.CreatedAt,
-			UpdateAt:     schedule.UpdatedAt,
+			CreatedAt:    schedule.CreatedAt,
+			UpdatedAt:    schedule.UpdatedAt,
 		})
 	}
 	pagination := utils.PaginationParam{
@@ -100,8 +100,8 @@ func (f *FieldScheduleService) GetByUUID(ctx context.Context, uuid string) (*dto
 		Date:         fieldSchedule.Date.Format(time.DateOnly),
 		Status:       fieldSchedule.Status.GetStatusString(),
 		Time:         fmt.Sprintf("%s - %s", fieldSchedule.Time.StartTime, fieldSchedule.Time.EndTime),
-		CreateAt:     fieldSchedule.CreatedAt,
-		UpdateAt:     fieldSchedule.UpdatedAt,
+		CreatedAt:    fieldSchedule.CreatedAt,
+		UpdatedAt:    fieldSchedule.UpdatedAt,
 	}
 	return &response, nil
 }
@@ -234,8 +234,8 @@ func (f *FieldScheduleService) Update(
 		PricePerHour: fieldResult.Field.PricePerHour,
 		Status:       fieldResult.Status.GetStatusString(),
 		Time:         fmt.Sprintf("%s - %s", scheduleTime.StartTime, scheduleTime.EndTime),
-		CreateAt:     fieldResult.CreatedAt,
-		UpdateAt:     fieldResult.UpdatedAt,
+		CreatedAt:    fieldResult.CreatedAt,
+		UpdatedAt:    fieldResult.UpdatedAt,
 	}
 	return &response, nil
 }

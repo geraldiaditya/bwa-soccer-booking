@@ -52,8 +52,8 @@ func (f *FieldService) GetAllWithPagination(
 			Name:         field.Name,
 			PricePerHour: field.PricePerHour,
 			Images:       field.Images,
-			CreateAt:     field.CreateAt,
-			UpdateAt:     field.UpdateAt,
+			CreatedAt:    field.CreatedAt,
+			UpdatedAt:    field.UpdatedAt,
 		})
 	}
 	pagination := &utils.PaginationParam{
@@ -97,8 +97,8 @@ func (f *FieldService) GetByUUID(ctx context.Context, uuid string) (*dto.FieldRe
 		Name:         field.Name,
 		PricePerHour: field.PricePerHour,
 		Images:       field.Images,
-		CreateAt:     field.CreateAt,
-		UpdateAt:     field.UpdateAt,
+		CreatedAt:    field.CreatedAt,
+		UpdatedAt:    field.UpdatedAt,
 	}
 	return &fieldResult, nil
 }
@@ -123,8 +123,8 @@ func (f *FieldService) Create(ctx context.Context, request *dto.FieldRequest) (*
 		Name:         field.Name,
 		PricePerHour: field.PricePerHour,
 		Images:       field.Images,
-		CreateAt:     field.CreateAt,
-		UpdateAt:     field.UpdateAt,
+		CreatedAt:    field.CreatedAt,
+		UpdatedAt:    field.UpdatedAt,
 	}
 	return response, nil
 }
@@ -159,8 +159,8 @@ func (f *FieldService) Update(ctx context.Context, uuidParams string, request *d
 		Name:         fieldResult.Name,
 		PricePerHour: fieldResult.PricePerHour,
 		Images:       fieldResult.Images,
-		CreateAt:     fieldResult.CreateAt,
-		UpdateAt:     fieldResult.UpdateAt,
+		CreatedAt:    fieldResult.CreatedAt,
+		UpdatedAt:    fieldResult.UpdatedAt,
 	}, nil
 }
 
