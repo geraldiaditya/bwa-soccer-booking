@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"field-service/common/utils"
 	"os"
 
@@ -31,6 +32,7 @@ type AppConfig struct {
 	GCSClientX509CertURL       string          `json:"gcsClientX509CertURL"`
 	GCSUniverseDomain          string          `json:"gcsUniverseDomain"`
 	GCSBucketName              string          `json:"gcsBucketName"`
+	AllowedOrigins             []string        `json:"allowedOrigins"`
 }
 
 type Database struct {
@@ -54,13 +56,36 @@ type User struct {
 	SignatureKey string `json:"signatureKey"`
 }
 
+func (c *AppConfig) Validate() error {
+	if c.Port <= 0 {
+		return errors.New("config: port is required and must be > 0")
+	}
+	if c.Database.Host == "" {
+		return errors.New("config: database host is required")
+	}
+	if c.Database.Name == "" {
+		return errors.New("config: database name is required")
+	}
+	if c.Database.Username == "" {
+		return errors.New("config: database username is required")
+	}
+	if c.SignatureKey == "" {
+		return errors.New("config: signatureKey is required")
+	}
+	return nil
+}
+
 func Init() {
 	err := utils.BindFromJSON(&Config, "config.json", ".")
 	if err != nil {
 		logrus.Infof("failed to bind config json:%v", err)
-		err = utils.BindFromConsul(&Config, os.Getenv("CONSUL_HTTP_URL"), os.Getenv("CONSUL_HTTP_key"))
-		if err != nil {
-			panic(err)
+		consulURL := os.Getenv("CONSUL_HTTP_URL")
+		consulKey := os.Getenv("CONSUL_HTTP_KEY")
+		if consulURL != "" && consulKey != "" {
+			err = utils.BindFromConsul(&Config, consulURL, consulKey)
+			if err != nil {
+				logrus.Errorf("failed to bind config from consul: %v", err)
+			}
 		}
 	}
 }
