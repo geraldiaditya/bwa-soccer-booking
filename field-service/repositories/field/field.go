@@ -28,7 +28,7 @@ func (f *FieldRepository) FindAllWithPagination(
 	)
 	sort = "create_at desc"
 	if param.SortColumn != nil {
-		sort = fmt.Sprintf("%s %s", param.SortColumn, param.SortOrder)
+		sort = fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
 	}
 
 	limit := param.Limit

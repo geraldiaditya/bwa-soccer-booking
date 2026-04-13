@@ -44,7 +44,7 @@ func (u *UserClient) GetUserByToken(ctx context.Context) (*UserData, error) {
 		return nil, errs[0]
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("user response: %", response.Message)
+		return nil, fmt.Errorf("user response: %s", response.Message)
 	}
 	return &response.Data, nil
 }

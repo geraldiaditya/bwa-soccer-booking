@@ -60,6 +60,6 @@ func ErrValidationResponse(err error) (validationResponse []ValidationResponse) 
 }
 
 func WrapError(err error) error {
-	logrus.Error("error %v", err)
+	logrus.Errorf("error %v", err)
 	return err
 }
