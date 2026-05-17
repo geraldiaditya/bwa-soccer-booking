@@ -54,6 +54,10 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
+		if err = config.InitRedis(context.Background()); err != nil {
+			panic(err)
+		}
+		defer config.CloseRedis()
 		loc, err := time.LoadLocation("Asia/Jakarta")
 
 		if err != nil {

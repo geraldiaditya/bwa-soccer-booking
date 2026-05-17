@@ -10,6 +10,7 @@ import (
 	"strings"
 	errWrap "user-service/common/error"
 	"user-service/common/response"
+	"user-service/common/session"
 	"user-service/config"
 	"user-service/constants"
 	errConstant "user-service/constants/error"
@@ -47,7 +48,7 @@ func ErrorHandler() gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last().Err
 			var fieldErrors validator.ValidationErrors
-			
+
 			if errors.As(err, &fieldErrors) {
 				errMessage := http.StatusText(http.StatusUnprocessableEntity)
 				errResponse := errWrap.ErrValidationResponse(err)
@@ -60,7 +61,7 @@ func ErrorHandler() gin.HandlerFunc {
 				})
 				return
 			}
-			
+
 			code := http.StatusBadRequest
 			if errConstant.ErrMapping(err) {
 				switch {
@@ -153,6 +154,10 @@ func validateBearerToken(c *gin.Context, token string) error {
 		return jwtSecret, nil
 	})
 	if err != nil || !tokenJwt.Valid {
+		return errConstant.ErrUnauthorized
+	}
+	tokenExists, err := session.ExistsJWT(c.Request.Context(), tokenString)
+	if err != nil || !tokenExists {
 		return errConstant.ErrUnauthorized
 	}
 	userLogin := c.Request.WithContext(context.WithValue(c.Request.Context(), constants.UserLogin, claims.User))

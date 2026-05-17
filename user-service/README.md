@@ -1,6 +1,6 @@
 # User Service
 
-Handles user registration, authentication, and profile management. Issues JWT tokens consumed by all other services.
+Handles user registration, authentication, and profile management. Issues JWT tokens consumed by all other services. Active JWT sessions are cached in Redis so tokens can be revoked before their expiry.
 
 **Port:** `8001`
 
@@ -33,9 +33,11 @@ user-service/
 ## Setup
 
 ```bash
-cp config.json.example config.json   # fill in DB credentials & JWT secret
+cp config.json.example config.json   # fill in DB credentials, Redis, and JWT secret
 go mod tidy
 ```
+
+For Docker Compose, set `redis.host` to `redis`. For local development outside Docker, use `localhost` when Redis is exposed on port `6379`.
 
 ## Run
 

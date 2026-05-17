@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"time"
+	"user-service/common/session"
 	"user-service/config"
 	"user-service/constants"
 	errConstant "user-service/constants/error"
@@ -68,6 +69,9 @@ func (u *UserService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	tokenString, err := token.SignedString([]byte(config.Config.JwtSecretKey))
 
 	if err != nil {
+		return nil, err
+	}
+	if err = session.SaveJWT(ctx, tokenString, data, time.Duration(config.Config.JwtExpirationTime)*time.Minute); err != nil {
 		return nil, err
 	}
 	response := &dto.LoginResponse{
@@ -146,7 +150,7 @@ func (u *UserService) Update(ctx context.Context, req *dto.UpdateRequest, uuid s
 			return nil, errConstant.ErrUserNameExist
 		}
 	}
-	
+
 	if user.Email != req.Email {
 		checkEmail, _ = u.repository.GetUser().FindByEmail(ctx, req.Email)
 		if checkEmail != nil {
