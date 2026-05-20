@@ -12,6 +12,7 @@ import (
 	"order-service/domain/dto"
 	"order-service/domain/models"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -43,8 +44,24 @@ func (o *OrderRepository) FindAllWithPagination(ctx context.Context, param *dto.
 		sort   string
 		total  int64
 	)
-	if param.SortColumn != nil {
-		sort = fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
+	if param.SortColumn != nil && *param.SortColumn != "" {
+		col := strings.ToLower(*param.SortColumn)
+		var ord string
+		if param.SortOrder != nil {
+			ord = strings.ToLower(*param.SortOrder)
+		} else {
+			ord = "desc"
+		}
+		
+		allowedColumns := map[string]bool{
+			"created_at": true, "amount": true, "status": true, "date": true,
+		}
+		allowedOrders := map[string]bool{"asc": true, "desc": true}
+
+		if !allowedColumns[col] || !allowedOrders[ord] {
+			return nil, 0, errWrap.WrapError(errConst.ErrRequestValidation)
+		}
+		sort = fmt.Sprintf("%s %s", col, ord)
 	} else {
 		sort = "created_at desc"
 	}
@@ -82,7 +99,7 @@ func (o *OrderRepository) FindByUserID(ctx context.Context, userID string) ([]mo
 
 func (o *OrderRepository) incrementCode(ctx context.Context) (*string, error) {
 	var (
-		order  *models.Order
+		order  models.Order
 		result string
 		today  = time.Now().Format("20060102")
 	)
@@ -98,7 +115,7 @@ func (o *OrderRepository) incrementCode(ctx context.Context) (*string, error) {
 		code := splitOrderName + 1
 		result = fmt.Sprintf("ORD-%05d-%s", code, today)
 	} else {
-		result = fmt.Sprintf("ORD-%5d-%s", 1, today)
+		result = fmt.Sprintf("ORD-%05d-%s", 1, today)
 	}
 
 	// ORD-00001-20250902

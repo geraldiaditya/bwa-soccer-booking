@@ -1,29 +1,26 @@
-FROM golang:1.23.4-alpine3.21 as builder
+FROM golang:1.23.4-alpine3.21 AS builder
 
-RUN apk update
-RUN apk add git openssh tzdata build-base python3 net-tools
+RUN apk add --no-cache git tzdata build-base
 
 WORKDIR /app
-
-COPY .env.example .env
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o order-service ./main.go
 
-RUN go install github.com/buu700/gin@latest
-RUN go mod tidy
+FROM alpine:3.21
 
-RUN make build
-
-FROM alpine:latest
-
-RUN apk update && apk upgrade && \
-    apk --update --no-cache add tzdata && \
-    apk --no-cache add curl && \
-    mkdir /app
+RUN apk add --no-cache tzdata wget ca-certificates && \
+    addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
+COPY --from=builder /app/order-service .
 
-EXPOSE 8004
+USER appuser
 
-COPY --from=builder /app /app
+EXPOSE 8003
 
-ENTRYPOINT [ "/app/order-service" ]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8003/health || exit 1
+
+ENTRYPOINT ["/app/order-service"]

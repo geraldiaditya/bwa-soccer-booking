@@ -8,9 +8,9 @@ import (
 
 type Order struct {
 	ID        uint                  `gorm:"primary_key;autoIncrement"`
-	UUID      uuid.UUID             `gorm:"type:uuid;not null"`
+	UUID      uuid.UUID             `gorm:"type:uuid;not null;uniqueIndex"`
 	Code      string                `gorm:"type:varchar(30);not null"`
-	UserID    uuid.UUID             `gorm:"type:uuid;not null"`
+	UserID    uuid.UUID             `gorm:"type:uuid;not null;index"`
 	PaymentID uuid.UUID             `gorm:"type:uuid;not null"`
 	Amount    float64               `gorm:"type:decimal(10,2);not null"`
 	Status    constants.OrderStatus `gorm:"type:int;not null"`

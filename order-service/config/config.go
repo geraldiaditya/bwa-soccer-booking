@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"order-service/common/utils"
 	"os"
 
@@ -18,6 +19,7 @@ type AppConfig struct {
 	Database              Database        `json:"database"`
 	RateLimiterMaxRequest float64         `json:"rateLimiterMaxRequest"`
 	RateLimiterTimeSecond float64         `json:"rateLimiterTimeSecond"`
+	AllowedOrigins        []string        `json:"allowedOrigins"`
 	InternalService       InternalService `json:"internalService"`
 	//GCSType                    string          `json:"gcsType"`
 	//GCSProjectID               string          `json:"gcsProjectID"`
@@ -49,7 +51,7 @@ type Database struct {
 type InternalService struct {
 	User    User    `json:"user"`
 	Field   Field   `json:"field"`
-	Payment Payment `json:"order"`
+	Payment Payment `json:"payment"`
 }
 
 type User struct {
@@ -93,4 +95,29 @@ func Init() {
 			panic(err)
 		}
 	}
+}
+
+func (c *AppConfig) Validate() error {
+	if c.Port == 0 {
+		return errors.New("config: port is required")
+	}
+	if c.AppName == "" {
+		return errors.New("config: appName is required")
+	}
+	if c.SignatureKey == "" {
+		return errors.New("config: signatureKey is required")
+	}
+	if c.InternalService.User.Host == "" {
+		return errors.New("config: internalService.user.host is required")
+	}
+	if c.InternalService.Field.Host == "" {
+		return errors.New("config: internalService.field.host is required")
+	}
+	if c.InternalService.Payment.Host == "" {
+		return errors.New("config: internalService.payment.host is required")
+	}
+	if len(c.Kafka.Brokers) == 0 {
+		return errors.New("config: kafka.brokers is required")
+	}
+	return nil
 }

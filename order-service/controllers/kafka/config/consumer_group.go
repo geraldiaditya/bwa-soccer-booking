@@ -5,7 +5,6 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/sirupsen/logrus"
 	"order-service/config"
-	"time"
 )
 
 type (
@@ -51,10 +50,11 @@ func (c *ConsumerGroup) ConsumeClaim(session sarama.ConsumerGroupSession, claim 
 			}
 		}
 		if err != nil {
-			logrus.Errorf("failed to handle message %s with error: %s", message.Topic, err)
-			break
+			logrus.Errorf("poison pill on topic %s, skipping: %s", message.Topic, err)
+			session.MarkMessage(message, "")
+			continue
 		}
-		session.MarkMessage(message, time.Now().UTC().String())
+		session.MarkMessage(message, "")
 	}
 	return nil
 }

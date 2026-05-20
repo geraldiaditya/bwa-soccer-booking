@@ -7,14 +7,14 @@ import (
 )
 
 type OrderRequest struct {
-	FieldScheduleIDs []string `json:"fieldScheduleIDs" validate:"required"`
+	FieldScheduleIDs []string `json:"fieldScheduleIDs" validate:"required,min=1,dive,uuid4"`
 }
 
 type OrderRequestParam struct {
-	Page       int     `form:"page" validate:"required"`
-	Limit      int     `form:"limit" validate:"required"`
-	SortColumn *string `form:"sortColumn" `
-	SortOrder  *string `form:"sortOrder"`
+	Page       int     `form:"page"       validate:"required,min=1"`
+	Limit      int     `form:"limit"      validate:"required,min=1,max=100"`
+	SortColumn *string `form:"sortColumn" validate:"omitempty,oneof=created_at amount status date"`
+	SortOrder  *string `form:"sortOrder"  validate:"omitempty,oneof=asc desc"`
 }
 
 type OrderResponse struct {

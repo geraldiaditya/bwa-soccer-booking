@@ -43,7 +43,7 @@ func (p *PaymentClient) GetPaymentByUUID(ctx context.Context, uuid uuid.UUID) (*
 		return nil, errs[0]
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("payment response: %", response.Message)
+		return nil, fmt.Errorf("payment response: %s", response.Message)
 	}
 	return &response.Data, nil
 }
@@ -79,7 +79,7 @@ func (p *PaymentClient) CreatePaymentLink(ctx context.Context, request *dto.Paym
 		if err != nil {
 			return nil, err
 		}
-		paymentErr := fmt.Errorf("payment response: %", response.Message)
+		paymentErr := fmt.Errorf("payment response: %s", response.Message)
 		return nil, paymentErr
 	}
 	err = json.Unmarshal([]byte(bodyRes), &response)

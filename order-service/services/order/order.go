@@ -11,6 +11,7 @@ import (
 	clientUser "order-service/clients/user"
 	"order-service/common/utils"
 	"order-service/constants"
+	errConst "order-service/constants/error"
 	errOrder "order-service/constants/error/order"
 	"order-service/domain/dto"
 	"order-service/domain/models"
@@ -99,10 +100,18 @@ func (o *OrderService) GetByUUID(ctx context.Context, uuid string) (*dto.OrderRe
 }
 
 func (o *OrderService) GetOrderByUserID(ctx context.Context) ([]dto.OrderByUserIDResponse, error) {
+	userVal := ctx.Value(constants.User)
+	if userVal == nil {
+		return nil, errConst.ErrUnauthorized
+	}
+	user, ok := userVal.(*clientUser.UserData)
+	if !ok {
+		return nil, errConst.ErrUnauthorized
+	}
+
 	var (
 		orders []models.Order
 		err    error
-		user   = ctx.Value(constants.User).(*clientUser.UserData)
 	)
 	orders, err = o.repository.GetOrder().FindByUserID(ctx, user.UUID.String())
 	if err != nil {
@@ -127,10 +136,18 @@ func (o *OrderService) GetOrderByUserID(ctx context.Context) ([]dto.OrderByUserI
 }
 
 func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dto.OrderResponse, error) {
+	userVal := ctx.Value(constants.User)
+	if userVal == nil {
+		return nil, errConst.ErrUnauthorized
+	}
+	user, ok := userVal.(*clientUser.UserData)
+	if !ok {
+		return nil, errConst.ErrUnauthorized
+	}
+
 	var (
 		order               *models.Order
 		txErr, err          error
-		user                = ctx.Value(constants.User).(*clientUser.UserData)
 		field               *clientField.FieldData
 		paymentResponse     *clientPayment.PaymentData
 		orderFieldSchedules = make([]models.OrderField, 0, len(param.FieldScheduleIDs))
@@ -139,7 +156,7 @@ func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dt
 
 	for _, fieldID := range param.FieldScheduleIDs {
 		uuidParsed := uuid.MustParse(fieldID)
-		field, err := o.client.GetField().GetFieldByUUID(ctx, uuidParsed)
+		field, err = o.client.GetField().GetFieldByUUID(ctx, uuidParsed)
 		if err != nil {
 			return nil, err
 		}

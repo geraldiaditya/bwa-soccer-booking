@@ -1,17 +1,19 @@
 package response
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	errConstant "order-service/constants/error"
 	"order-service/constants"
+	errConstant "order-service/constants/error"
 )
 
 type Response struct {
-	Status  string      `json:"status"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
-	Token   *string     `json:"token,omitempty"`
+	Status    string      `json:"status"`
+	Message   string      `json:"message"`
+	Data      interface{} `json:"data,omitempty"`
+	Token     *string     `json:"token,omitempty"`
+	RequestId string      `json:"requestId,omitempty"`
 }
 
 type ParamHTTPResp struct {
@@ -24,12 +26,19 @@ type ParamHTTPResp struct {
 }
 
 func HttpResponse(param ParamHTTPResp) {
+	requestID, _ := param.Gin.Get("request_id")
+	requestIDStr := fmt.Sprintf("%v", requestID)
+	if requestID == nil {
+		requestIDStr = ""
+	}
+
 	if param.Err == nil {
 		param.Gin.JSON(param.Code, Response{
-			Status:  constants.Success,
-			Message: http.StatusText(http.StatusOK),
-			Data:    param.Data,
-			Token:   param.Token,
+			Status:    constants.Success,
+			Message:   http.StatusText(http.StatusOK),
+			Data:      param.Data,
+			Token:     param.Token,
+			RequestId: requestIDStr,
 		})
 		return
 	}
@@ -45,9 +54,10 @@ func HttpResponse(param ParamHTTPResp) {
 	}
 
 	param.Gin.JSON(param.Code, Response{
-		Status:  constants.Error,
-		Message: message,
-		Data:    param.Data,
+		Status:    constants.Error,
+		Message:   message,
+		Data:      param.Data,
+		RequestId: requestIDStr,
 	})
 	return
 }
