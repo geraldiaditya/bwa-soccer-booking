@@ -1,5 +1,11 @@
 name: soccer-docker # change this to your app name
 services:
+  redis:
+    container_name: user-service-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   user-service: # change this to your service name
     container_name: user-service # change this to your service name
     # image: ralsaditya/user-service:1 # change this to your image name
@@ -11,3 +17,5 @@ services:
       - "8001:8001" # change this to your port
     env_file:
       - .env
+    depends_on:
+      - redis

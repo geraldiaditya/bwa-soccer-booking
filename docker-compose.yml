@@ -28,6 +28,16 @@ services:
     networks:
       - soccer-network
 
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - soccer-network
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.6
     container_name: zookeeper
@@ -84,6 +94,7 @@ services:
       - "8001:8001"
     depends_on:
       - postgres
+      - redis
     networks:
       - soccer-network
 
@@ -132,3 +143,4 @@ networks:
 volumes:
   postgresql:
   postgresql_data:
+  redis_data:
