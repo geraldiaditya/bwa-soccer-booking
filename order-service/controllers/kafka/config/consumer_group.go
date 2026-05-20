@@ -35,6 +35,7 @@ func (c *ConsumerGroup) ConsumeClaim(session sarama.ConsumerGroupSession, claim 
 		handler, ok := c.handler[TopicName(message.Topic)]
 		if !ok {
 			logrus.Errorf("topic:%s not exist", message.Topic)
+			session.MarkMessage(message, "")
 			continue
 		}
 		var err error
@@ -51,9 +52,8 @@ func (c *ConsumerGroup) ConsumeClaim(session sarama.ConsumerGroupSession, claim 
 		}
 		if err != nil {
 			logrus.Errorf("poison pill on topic %s, skipping: %s", message.Topic, err)
-			session.MarkMessage(message, "")
-			continue
 		}
+		// Always mark the offset regardless of success or poison-pill.
 		session.MarkMessage(message, "")
 	}
 	return nil

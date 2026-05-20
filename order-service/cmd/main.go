@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/IBM/sarama"
 	"github.com/didip/tollbooth"
@@ -61,11 +62,6 @@ var command = &cobra.Command{
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		loc, err := time.LoadLocation("Asia/Jakarta")
-		if err != nil {
-			logrus.Fatal(err)
-		}
-		time.Local = loc
 		err = db.AutoMigrate(
 			&models.Order{},
 			&models.OrderHistory{},
@@ -81,8 +77,9 @@ var command = &cobra.Command{
 		controller := controllers.NewControllerRegistry(service)
 
 		router := gin.Default()
-		router.Use(middlewares.RequestLogger())
+		// HandlePanic must be first so it recovers panics from all subsequent middleware/handlers.
 		router.Use(middlewares.HandlePanic())
+		router.Use(middlewares.RequestLogger())
 		router.Use(middlewares.SecurityHeaders())
 		router.Use(middlewares.CORS())
 
@@ -123,14 +120,14 @@ var command = &cobra.Command{
 			Handler: router,
 		}
 
+		serverErr := make(chan error, 1)
 		go func() {
 			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logrus.Fatalf("HTTP server error: %v", err)
+				serverErr <- err
 			}
 		}()
 		logrus.Infof("HTTP server started on port %s", port)
 
-		// Kafka Consumer Configuration
 		kafkaConsumerConfig := sarama.NewConfig()
 		kafkaConsumerConfig.Consumer.MaxWaitTime = time.Duration(config.Config.Kafka.MaxWaitTimeInMs) * time.Millisecond
 		kafkaConsumerConfig.Consumer.MaxProcessingTime = time.Duration(config.Config.Kafka.MaxProcessingTimeInMs) * time.Millisecond
@@ -147,7 +144,7 @@ var command = &cobra.Command{
 
 		consumerGroup, err := sarama.NewConsumerGroup(brokers, groupId, kafkaConsumerConfig)
 		if err != nil {
-			logrus.Fatalf("Error creating consumer group: %v", err)
+			logrus.Fatalf("error creating consumer group: %v", err)
 		}
 
 		consumer := kafka.NewConsumerGroup()
@@ -158,11 +155,18 @@ var command = &cobra.Command{
 		shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 		defer shutdownCancel()
 
+		backoff := time.Duration(config.Config.Kafka.BackoffTimeInMS) * time.Millisecond
+
 		go func() {
 			for {
-				err = consumerGroup.Consume(shutdownCtx, topics, consumer)
-				if err != nil {
-					logrus.Errorf("failed to consume: %v", err)
+				if consumeErr := consumerGroup.Consume(shutdownCtx, topics, consumer); consumeErr != nil {
+					logrus.Errorf("failed to consume: %v", consumeErr)
+					// backoff before retrying to avoid spinning on persistent broker errors
+					select {
+					case <-time.After(backoff):
+					case <-shutdownCtx.Done():
+						return
+					}
 				}
 				if shutdownCtx.Err() != nil {
 					return
@@ -173,24 +177,32 @@ var command = &cobra.Command{
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-		<-signals
-		logrus.Info("Shutdown Server ...")
+
+		select {
+		case sig := <-signals:
+			logrus.Infof("received signal %v, initiating shutdown", sig)
+		case err := <-serverErr:
+			logrus.Errorf("HTTP server error: %v, initiating shutdown", err)
+		}
 
 		shutdownCancel()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			logrus.Errorf("Server Shutdown error: %v", err)
+			logrus.Errorf("server shutdown error: %v", err)
 		}
 
-		consumerGroup.Close()
+		if err := consumerGroup.Close(); err != nil {
+			logrus.Errorf("consumer group close error: %v", err)
+		}
 
-		sqlDB, _ := db.DB()
-		if sqlDB != nil {
+		if sqlDB, err := db.DB(); err != nil {
+			logrus.Errorf("failed to get underlying sql.DB: %v", err)
+		} else {
 			sqlDB.Close()
 		}
 
-		logrus.Info("Server exiting")
+		logrus.Info("server exiting")
 	},
 }

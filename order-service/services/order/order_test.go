@@ -108,6 +108,8 @@ func TestGetAllWithPagination_Success(t *testing.T) {
 	assert.Equal(t, int64(1), res.TotalData)
 	assert.Equal(t, 1, res.Page)
 	assert.Equal(t, 10, res.Limit)
+	mockOrderRepo.AssertExpectations(t)
+	mockUserClient.AssertExpectations(t)
 }
 
 func TestGetAllWithPagination_DBError(t *testing.T) {
@@ -125,6 +127,7 @@ func TestGetAllWithPagination_DBError(t *testing.T) {
 	res, err := svc.GetAllWithPagination(ctx, param)
 	assert.ErrorIs(t, err, dbErr)
 	assert.Nil(t, res)
+	mockOrderRepo.AssertExpectations(t)
 }
 
 func TestGetAllWithPagination_UserClientError(t *testing.T) {
@@ -159,6 +162,8 @@ func TestGetAllWithPagination_UserClientError(t *testing.T) {
 	res, err := svc.GetAllWithPagination(ctx, param)
 	assert.ErrorIs(t, err, clientErr)
 	assert.Nil(t, res)
+	mockOrderRepo.AssertExpectations(t)
+	mockUserClient.AssertExpectations(t)
 }
 
 func TestCreate_Success(t *testing.T) {
@@ -221,6 +226,9 @@ func TestCreate_Success(t *testing.T) {
 	assert.Equal(t, createdOrder.UUID, res.UUID)
 	assert.Equal(t, "https://midtrans.com/pay/123", res.PaymentLink)
 	assert.NoError(t, mockSql.ExpectationsWereMet())
+	mockOrderRepo.AssertExpectations(t)
+	mockFieldClient.AssertExpectations(t)
+	mockPaymentClient.AssertExpectations(t)
 }
 
 func TestCreate_Unauthorized(t *testing.T) {
@@ -316,6 +324,9 @@ func TestCreate_PaymentClientError(t *testing.T) {
 	assert.ErrorIs(t, err, paymentErr)
 	assert.Nil(t, res)
 	assert.NoError(t, mockSql.ExpectationsWereMet())
+	mockOrderRepo.AssertExpectations(t)
+	mockFieldClient.AssertExpectations(t)
+	mockPaymentClient.AssertExpectations(t)
 }
 
 func TestHandlePayment_Settlement(t *testing.T) {
@@ -362,6 +373,10 @@ func TestHandlePayment_Settlement(t *testing.T) {
 	err := svc.HandlePayment(ctx, paymentData)
 	assert.NoError(t, err)
 	assert.NoError(t, mockSql.ExpectationsWereMet())
+	mockOrderRepo.AssertExpectations(t)
+	mockHistoryRepo.AssertExpectations(t)
+	mockFieldRepo.AssertExpectations(t)
+	mockFieldClient.AssertExpectations(t)
 }
 
 func TestHandlePayment_Expired(t *testing.T) {
@@ -396,4 +411,20 @@ func TestHandlePayment_Expired(t *testing.T) {
 	err := svc.HandlePayment(ctx, paymentData)
 	assert.NoError(t, err)
 	assert.NoError(t, mockSql.ExpectationsWereMet())
+	mockOrderRepo.AssertExpectations(t)
+	mockHistoryRepo.AssertExpectations(t)
+}
+
+func TestHandlePayment_UnknownStatus(t *testing.T) {
+	svc, _, _, _, _, _, _, _, _, _ := setupTest(t)
+
+	ctx := context.Background()
+	paymentData := &dto.PaymentData{
+		OrderID:   uuid.New(),
+		PaymentID: uuid.New(),
+		Status:    "deny", // unknown / unsupported status
+	}
+
+	err := svc.HandlePayment(ctx, paymentData)
+	assert.ErrorIs(t, err, errOrder.ErrUnknownPaymentStatus)
 }

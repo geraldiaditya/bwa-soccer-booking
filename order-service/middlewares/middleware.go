@@ -5,19 +5,22 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+	"time"
+
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"net/http"
+
 	"order-service/clients"
 	"order-service/common/response"
 	"order-service/config"
 	"order-service/constants"
 	errConstant "order-service/constants/error"
-	"strings"
-	"time"
 )
 
 func RequestLogger() gin.HandlerFunc {
@@ -135,15 +138,6 @@ func validateAPIKey(c *gin.Context) error {
 	return nil
 }
 
-func contains(roles []string, role string) bool {
-	for _, r := range roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
-}
-
 func CheckRole(roles []string, client clients.IClientRegistry) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, err := client.GetUser().GetUserByToken(c.Request.Context())
@@ -152,7 +146,7 @@ func CheckRole(roles []string, client clients.IClientRegistry) gin.HandlerFunc {
 			return
 		}
 
-		if !contains(roles, user.Role) {
+		if !slices.Contains(roles, user.Role) {
 			responseUnauthorized(c, errConstant.ErrUnauthorized.Error())
 			return
 		}
@@ -188,22 +182,11 @@ func CORS() gin.HandlerFunc {
 		allowedOrigins := config.Config.AllowedOrigins
 		origin := c.GetHeader("Origin")
 
-		allowed := false
-		if len(allowedOrigins) == 0 || config.Config.AppEnv == "local" {
-			allowed = true
-		} else {
-			for _, o := range allowedOrigins {
-				if o == origin {
-					allowed = true
-					break
-				}
-			}
-		}
+		allowed := config.Config.AppEnv == "local" || config.Config.AppEnv == "development" ||
+			slices.Contains(allowedOrigins, origin)
 
 		if allowed && origin != "" {
 			c.Header("Access-Control-Allow-Origin", origin)
-		} else if len(allowedOrigins) == 0 {
-			c.Header("Access-Control-Allow-Origin", "*")
 		}
 
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
@@ -222,10 +205,12 @@ func SecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Content-Security-Policy", "default-src 'self'")
 		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		// Exclude CSP for Swagger UI which requires inline scripts/styles.
+		if !strings.HasPrefix(c.Request.URL.Path, "/swagger") {
+			c.Header("Content-Security-Policy", "default-src 'self'")
+		}
 		c.Next()
 	}
 }

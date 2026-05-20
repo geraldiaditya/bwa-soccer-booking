@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	errWrap "order-service/common/error"
 	errConst "order-service/constants/error"
 	errOrder "order-service/constants/error/order"
@@ -97,33 +98,39 @@ func (o *OrderRepository) FindByUserID(ctx context.Context, userID string) ([]mo
 	return orders, nil
 }
 
-func (o *OrderRepository) incrementCode(ctx context.Context) (*string, error) {
+// incrementCode acquires a pessimistic row lock (SELECT ... FOR UPDATE) to prevent
+// duplicate codes under concurrent order creation within the same transaction.
+func (o *OrderRepository) incrementCode(ctx context.Context, tx *gorm.DB) (*string, error) {
 	var (
 		order  models.Order
 		result string
 		today  = time.Now().Format("20060102")
 	)
-	err := o.db.WithContext(ctx).Order("id desc").First(&order).Error
+	err := tx.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Order("id desc").
+		First(&order).Error
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errWrap.WrapError(errConst.ErrSQLError)
 		}
 	}
 	if order.ID != 0 {
-		orderCode := order.Code
-		splitOrderName, _ := strconv.Atoi(orderCode[4:9])
-		code := splitOrderName + 1
-		result = fmt.Sprintf("ORD-%05d-%s", code, today)
+		// Use SplitN to handle codes with more than 5 digits gracefully.
+		parts := strings.SplitN(order.Code, "-", 3)
+		var num int
+		if len(parts) >= 2 {
+			num, _ = strconv.Atoi(parts[1])
+		}
+		result = fmt.Sprintf("ORD-%05d-%s", num+1, today)
 	} else {
 		result = fmt.Sprintf("ORD-%05d-%s", 1, today)
 	}
-
-	// ORD-00001-20250902
 	return &result, nil
 }
 
 func (o *OrderRepository) Create(ctx context.Context, tx *gorm.DB, order *models.Order) (*models.Order, error) {
-	orderCode, err := o.incrementCode(ctx)
+	orderCode, err := o.incrementCode(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
