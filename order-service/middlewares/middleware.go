@@ -5,27 +5,75 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+	"time"
+
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"net/http"
+
 	"order-service/clients"
 	"order-service/common/response"
 	"order-service/config"
 	"order-service/constants"
 	errConstant "order-service/constants/error"
-	"strings"
 )
+
+func RequestLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
+
+		requestID := uuid.New().String()
+		c.Set("request_id", requestID)
+		c.Header("X-Request-ID", requestID)
+
+		c.Next()
+
+		timeStamp := time.Now()
+		latency := timeStamp.Sub(start)
+
+		clientIP := c.ClientIP()
+		method := c.Request.Method
+		statusCode := c.Writer.Status()
+
+		if raw != "" {
+			path = path + "?" + raw
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"method":     method,
+			"path":       path,
+			"status":     statusCode,
+			"latency_ms": latency.Milliseconds(),
+			"client_ip":  clientIP,
+			"request_id": requestID,
+		}).Info("request completed")
+	}
+}
 
 func HandlePanic() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
-				logrus.Errorf("Recovered from panic: %v", r)
+				requestID, _ := c.Get("request_id")
+				logrus.WithFields(logrus.Fields{
+					"request_id": requestID,
+				}).Errorf("Recovered from panic: %v", r)
+				
+				requestIDStr := ""
+				if requestID != nil {
+					requestIDStr = fmt.Sprintf("%v", requestID)
+				}
 				c.JSON(http.StatusInternalServerError, response.Response{
-					Status:  constants.Error,
-					Message: errConstant.ErrInternalServerError.Error(),
+					Status:    constants.Error,
+					Message:   errConstant.ErrInternalServerError.Error(),
+					RequestId: requestIDStr,
 				})
 				c.Abort()
 			}
@@ -38,11 +86,18 @@ func RateLimiter(limit *limiter.Limiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		err := tollbooth.LimitByRequest(limit, c.Writer, c.Request)
 		if err != nil {
-			c.JSON(http.StatusTooManyRequests, response.Response{
-				Status:  constants.Error,
-				Message: errConstant.ErrTooManyRequests.Error(),
+			logrus.WithFields(logrus.Fields{
+				"path": c.Request.URL.Path,
+			}).Warn("Rate limit exceeded")
+
+			c.Header("Retry-After", "60")
+			response.HttpResponse(response.ParamHTTPResp{
+				Code: http.StatusTooManyRequests,
+				Err:  errConstant.ErrTooManyRequests,
+				Gin:  c,
 			})
 			c.Abort()
+			return
 		}
 		c.Next()
 	}
@@ -83,15 +138,6 @@ func validateAPIKey(c *gin.Context) error {
 	return nil
 }
 
-func contains(roles []string, role string) bool {
-	for _, r := range roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
-}
-
 func CheckRole(roles []string, client clients.IClientRegistry) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, err := client.GetUser().GetUserByToken(c.Request.Context())
@@ -100,7 +146,7 @@ func CheckRole(roles []string, client clients.IClientRegistry) gin.HandlerFunc {
 			return
 		}
 
-		if !contains(roles, user.Role) {
+		if !slices.Contains(roles, user.Role) {
 			responseUnauthorized(c, errConstant.ErrUnauthorized.Error())
 			return
 		}
@@ -127,6 +173,44 @@ func Authenticate() gin.HandlerFunc {
 		tokenString := extractBearerToken(token)
 		tokenUser := c.Request.WithContext(context.WithValue(c.Request.Context(), constants.Token, tokenString))
 		c.Request = tokenUser
+		c.Next()
+	}
+}
+
+func CORS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		allowedOrigins := config.Config.AllowedOrigins
+		origin := c.GetHeader("Origin")
+
+		allowed := config.Config.AppEnv == "local" || config.Config.AppEnv == "development" ||
+			slices.Contains(allowedOrigins, origin)
+
+		if allowed && origin != "" {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-service-name, x-apikey, x-request-at")
+		c.Header("Access-Control-Max-Age", "43200")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}
+
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		// Exclude CSP for Swagger UI which requires inline scripts/styles.
+		if !strings.HasPrefix(c.Request.URL.Path, "/swagger") {
+			c.Header("Content-Security-Policy", "default-src 'self'")
+		}
 		c.Next()
 	}
 }

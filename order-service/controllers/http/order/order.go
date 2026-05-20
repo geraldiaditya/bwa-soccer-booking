@@ -6,6 +6,7 @@ import (
 	"net/http"
 	errValidation "order-service/common/error"
 	"order-service/common/response"
+	errConstant "order-service/constants/error"
 	"order-service/domain/dto"
 	"order-service/services"
 )
@@ -26,6 +27,21 @@ type OrderController struct {
 	service services.IServiceRegistry
 }
 
+// GetAllWithPagination godoc
+// @Summary      Get all orders with pagination
+// @Description  Retrieve a paginated list of all orders with optional sorting
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Param        page        query     int     true   "Page number"
+// @Param        limit       query     int     true   "Page limit"
+// @Param        sortColumn  query     string  false  "Sort column"
+// @Param        sortOrder   query     string  false  "Sort order"
+// @Success      200         {object}  response.Response
+// @Failure      400         {object}  response.Response
+// @Failure      401         {object}  response.Response
+// @Failure      500         {object}  response.Response
+// @Router       /order [get]
 func (o *OrderController) GetAllWithPagination(ctx *gin.Context) {
 	var params dto.OrderRequestParam
 	err := ctx.ShouldBindQuery(&params)
@@ -56,7 +72,7 @@ func (o *OrderController) GetAllWithPagination(ctx *gin.Context) {
 	if err != nil {
 		response.HttpResponse(
 			response.ParamHTTPResp{
-				Code: http.StatusBadRequest,
+				Code: errConstant.ErrStatusCode(err),
 				Err:  err,
 				Gin:  ctx,
 			})
@@ -70,13 +86,26 @@ func (o *OrderController) GetAllWithPagination(ctx *gin.Context) {
 		})
 }
 
+// GetByUUID godoc
+// @Summary      Get order by UUID
+// @Description  Retrieve order details by UUID
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Param        uuid        path      string  true   "Order UUID"
+// @Success      200         {object}  response.Response
+// @Failure      400         {object}  response.Response
+// @Failure      401         {object}  response.Response
+// @Failure      404         {object}  response.Response
+// @Failure      500         {object}  response.Response
+// @Router       /order/{uuid} [get]
 func (o *OrderController) GetByUUID(ctx *gin.Context) {
 	uuid := ctx.Param("uuid")
 	result, err := o.service.GetOrder().GetByUUID(ctx, uuid)
 	if err != nil {
 		response.HttpResponse(
 			response.ParamHTTPResp{
-				Code: http.StatusBadRequest,
+				Code: errConstant.ErrStatusCode(err),
 				Err:  err,
 				Gin:  ctx,
 			})
@@ -90,12 +119,23 @@ func (o *OrderController) GetByUUID(ctx *gin.Context) {
 		})
 }
 
+// GetOrderByUserId godoc
+// @Summary      Get orders by user ID
+// @Description  Retrieve a list of orders for the currently authenticated user
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Success      200         {object}  response.Response
+// @Failure      400         {object}  response.Response
+// @Failure      401         {object}  response.Response
+// @Failure      500         {object}  response.Response
+// @Router       /order/user [get]
 func (o *OrderController) GetOrderByUserId(ctx *gin.Context) {
 	result, err := o.service.GetOrder().GetOrderByUserID(ctx.Request.Context())
 	if err != nil {
 		response.HttpResponse(
 			response.ParamHTTPResp{
-				Code: http.StatusBadRequest,
+				Code: errConstant.ErrStatusCode(err),
 				Gin:  ctx,
 				Err:  err,
 			})
@@ -109,6 +149,19 @@ func (o *OrderController) GetOrderByUserId(ctx *gin.Context) {
 		})
 }
 
+// Create godoc
+// @Summary      Create a new order
+// @Description  Create a new booking order for soccer field schedules
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Param        request     body      dto.OrderRequest  true  "Order details"
+// @Success      200         {object}  response.Response
+// @Failure      400         {object}  response.Response
+// @Failure      401         {object}  response.Response
+// @Failure      422         {object}  response.Response
+// @Failure      500         {object}  response.Response
+// @Router       /order [post]
 func (o *OrderController) Create(ctx *gin.Context) {
 	var (
 		request  dto.OrderRequest
@@ -142,7 +195,7 @@ func (o *OrderController) Create(ctx *gin.Context) {
 	if err != nil {
 		response.HttpResponse(
 			response.ParamHTTPResp{
-				Code: http.StatusBadRequest,
+				Code: errConstant.ErrStatusCode(err),
 				Gin:  ctx,
 				Err:  err,
 			})

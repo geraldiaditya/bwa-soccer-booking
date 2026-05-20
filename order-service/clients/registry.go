@@ -30,15 +30,15 @@ func (registry *ClientRegistry) GetUser() userClient.IUserClient {
 func (registry *ClientRegistry) GetPayment() paymentClient.IPaymentClient {
 	return paymentClient.NewPaymentClient(
 		config.NewClientConfig(
-			config.WithBaseUrl(configApp.Config.InternalService.User.Host),
-			config.WithSignatureKey(configApp.Config.InternalService.User.SignatureKey),
+			config.WithBaseUrl(configApp.Config.InternalService.Payment.Host),
+			config.WithSignatureKey(configApp.Config.InternalService.Payment.SignatureKey),
 		))
 }
 
 func (registry *ClientRegistry) GetField() fieldClient.IFieldClient {
 	return fieldClient.NewFieldClient(
 		config.NewClientConfig(
-			config.WithBaseUrl(configApp.Config.InternalService.User.Host),
-			config.WithSignatureKey(configApp.Config.InternalService.User.SignatureKey),
+			config.WithBaseUrl(configApp.Config.InternalService.Field.Host),
+			config.WithSignatureKey(configApp.Config.InternalService.Field.SignatureKey),
 		))
 }

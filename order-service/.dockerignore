@@ -1,0 +1,8 @@
+.git
+.gitignore
+.idea
+*.md
+bin/
+*_test.go
+config.json
+*.env

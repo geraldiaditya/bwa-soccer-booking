@@ -11,6 +11,7 @@ import (
 	clientUser "order-service/clients/user"
 	"order-service/common/utils"
 	"order-service/constants"
+	errConst "order-service/constants/error"
 	errOrder "order-service/constants/error/order"
 	"order-service/domain/dto"
 	"order-service/domain/models"
@@ -99,10 +100,18 @@ func (o *OrderService) GetByUUID(ctx context.Context, uuid string) (*dto.OrderRe
 }
 
 func (o *OrderService) GetOrderByUserID(ctx context.Context) ([]dto.OrderByUserIDResponse, error) {
+	userVal := ctx.Value(constants.User)
+	if userVal == nil {
+		return nil, errConst.ErrUnauthorized
+	}
+	user, ok := userVal.(*clientUser.UserData)
+	if !ok {
+		return nil, errConst.ErrUnauthorized
+	}
+
 	var (
 		orders []models.Order
 		err    error
-		user   = ctx.Value(constants.User).(*clientUser.UserData)
 	)
 	orders, err = o.repository.GetOrder().FindByUserID(ctx, user.UUID.String())
 	if err != nil {
@@ -127,10 +136,18 @@ func (o *OrderService) GetOrderByUserID(ctx context.Context) ([]dto.OrderByUserI
 }
 
 func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dto.OrderResponse, error) {
+	userVal := ctx.Value(constants.User)
+	if userVal == nil {
+		return nil, errConst.ErrUnauthorized
+	}
+	user, ok := userVal.(*clientUser.UserData)
+	if !ok {
+		return nil, errConst.ErrUnauthorized
+	}
+
 	var (
 		order               *models.Order
 		txErr, err          error
-		user                = ctx.Value(constants.User).(*clientUser.UserData)
 		field               *clientField.FieldData
 		paymentResponse     *clientPayment.PaymentData
 		orderFieldSchedules = make([]models.OrderField, 0, len(param.FieldScheduleIDs))
@@ -138,8 +155,11 @@ func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dt
 	)
 
 	for _, fieldID := range param.FieldScheduleIDs {
-		uuidParsed := uuid.MustParse(fieldID)
-		field, err := o.client.GetField().GetFieldByUUID(ctx, uuidParsed)
+		uuidParsed, parseErr := uuid.Parse(fieldID)
+		if parseErr != nil {
+			return nil, errConst.ErrRequestValidation
+		}
+		field, err = o.client.GetField().GetFieldByUUID(ctx, uuidParsed)
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +173,7 @@ func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dt
 		order, txErr = o.repository.GetOrder().Create(ctx, tx, &models.Order{
 			UserID: user.UUID,
 			Amount: totalAmount,
-			Date:   time.Now(),
+			Date:   time.Now().UTC(),
 			Status: constants.Pending,
 			IsPaid: false,
 		})
@@ -161,7 +181,7 @@ func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dt
 			return txErr
 		}
 		for _, fieldID := range param.FieldScheduleIDs {
-			uuidParsed := uuid.MustParse(fieldID)
+			uuidParsed, _ := uuid.Parse(fieldID)
 			orderFieldSchedules = append(orderFieldSchedules, models.OrderField{
 				OrderID:         order.ID,
 				FieldScheduleID: uuidParsed,
@@ -229,12 +249,16 @@ func (o *OrderService) Create(ctx context.Context, param *dto.OrderRequest) (*dt
 }
 
 func (o *OrderService) HandlePayment(ctx context.Context, data *dto.PaymentData) error {
+	status, body, err := o.mapPaymentStatusToOrder(data)
+	if err != nil {
+		return err
+	}
+
 	var (
-		err, txErr          error
 		order               *models.Order
 		orderFieldSchedules []models.OrderField
+		txErr               error
 	)
-	status, body := o.mapPaymentStatusToOrder(data)
 	err = o.repository.GetTx().Transaction(func(tx *gorm.DB) error {
 		txErr = o.repository.GetOrder().Update(ctx, tx, data.OrderID, body)
 		if txErr != nil {
@@ -248,6 +272,9 @@ func (o *OrderService) HandlePayment(ctx context.Context, data *dto.PaymentData)
 			Status:  status.GetStatusString(),
 			OrderID: order.ID,
 		})
+		if txErr != nil {
+			return txErr
+		}
 		if data.Status == constants.SettlementPaymentStatus {
 			orderFieldSchedules, txErr = o.repository.GetOrderField().FindByOrderID(ctx, order.ID)
 			if txErr != nil {
@@ -266,40 +293,34 @@ func (o *OrderService) HandlePayment(ctx context.Context, data *dto.PaymentData)
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-func (o *OrderService) mapPaymentStatusToOrder(request *dto.PaymentData) (constants.OrderStatus, *models.Order) {
-	var (
-		status constants.OrderStatus
-		order  *models.Order
-	)
+func (o *OrderService) mapPaymentStatusToOrder(request *dto.PaymentData) (constants.OrderStatus, *models.Order, error) {
 	switch request.Status {
 	case constants.SettlementPaymentStatus:
-		status = constants.PaymentSuccess
-		order = &models.Order{
+		status := constants.PaymentSuccess
+		return status, &models.Order{
 			IsPaid:    true,
 			PaymentID: request.PaymentID,
 			PaidAt:    request.PaidAt,
 			Status:    status,
-		}
+		}, nil
 	case constants.ExpirePaymentStatus:
-		status = constants.Expired
-		order = &models.Order{
+		status := constants.Expired
+		return status, &models.Order{
 			IsPaid:    false,
 			PaymentID: request.PaymentID,
 			Status:    status,
-		}
+		}, nil
 	case constants.PendingPaymentStatus:
-		status = constants.PendingPayment
-		order = &models.Order{
+		status := constants.PendingPayment
+		return status, &models.Order{
 			IsPaid:    false,
 			PaymentID: request.PaymentID,
 			Status:    status,
-		}
+		}, nil
+	default:
+		return 0, nil, errOrder.ErrUnknownPaymentStatus
 	}
-	return status, order
 }

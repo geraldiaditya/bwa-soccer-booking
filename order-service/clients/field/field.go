@@ -43,7 +43,7 @@ func (f *FieldClient) GetFieldByUUID(ctx context.Context, uuid uuid.UUID) (*Fiel
 		return nil, errs[0]
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("field response: %", response.Message)
+		return nil, fmt.Errorf("field response: %s", response.Message)
 	}
 	return &response.Data, nil
 }
@@ -76,7 +76,7 @@ func (f *FieldClient) UpdateStatus(request *dto.UpdateStatusFieldScheduleRequest
 		if err != nil {
 			return err
 		}
-		fieldErr := fmt.Errorf("field response: %", response.Message)
+		fieldErr := fmt.Errorf("field response: %s", response.Message)
 		return fieldErr
 	}
 	err = json.Unmarshal([]byte(bodyRes), &response)
