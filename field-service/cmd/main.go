@@ -24,6 +24,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "field-service/docs"
+
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth/limiter"
 	"github.com/gin-gonic/gin"
@@ -32,7 +34,6 @@ import (
 	"github.com/spf13/cobra"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	_ "field-service/docs"
 )
 
 // @title Field Service API
@@ -47,9 +48,9 @@ var command = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = godotenv.Load()
 		config.Init()
-	if err := config.Config.Validate(); err != nil {
-		logrus.Fatalf("invalid configuration: %v", err)
-	}
+		if err := config.Config.Validate(); err != nil {
+			logrus.Fatalf("invalid configuration: %v", err)
+		}
 		db, err := config.InitDatabase()
 		if err != nil {
 			logrus.Fatal(err)
@@ -75,11 +76,19 @@ var command = &cobra.Command{
 
 		controller := controllers.NewControllerRegistry(service)
 
+		lmt := tollbooth.NewLimiter(
+			config.Config.RateLimiterMaxRequest,
+			&limiter.ExpirableOptions{
+				DefaultExpirationTTL: time.Duration(config.Config.RateLimiterTimeSecond) * time.Second,
+			},
+		)
+
 		router := gin.Default()
 		router.Use(middlewares.RequestLogger())
 		router.Use(middlewares.HandlePanic())
 		router.Use(middlewares.SecurityHeaders())
 		router.Use(middlewares.CORS())
+		router.Use(middlewares.RateLimiter(lmt))
 
 		router.NoRoute(func(c *gin.Context) {
 			c.JSON(http.StatusNotFound, response.Response{
@@ -94,28 +103,9 @@ var command = &cobra.Command{
 			})
 		})
 
-		router.Use(func(context *gin.Context) {
-			context.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			context.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH")
-			context.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-service-name, x-apikey, x-request-at")
-			if context.Request.Method == "OPTIONS" {
-				context.AbortWithStatus(204)
-				return
-			}
-			context.Next()
-		})
-
 		hc := healthController.NewHealthController(db)
 		hr := healthRoute.NewHealthRoute(router, hc)
 		hr.Serve()
-
-		lmt := tollbooth.NewLimiter(
-			config.Config.RateLimiterMaxRequest,
-			&limiter.ExpirableOptions{
-				DefaultExpirationTTL: time.Duration(config.Config.RateLimiterTimeSecond) * time.Second,
-			},
-		)
-		router.Use(middlewares.RateLimiter(lmt))
 
 		group := router.Group("/api/v1")
 		route := routes.NewRouteRegistry(group, controller, client)
