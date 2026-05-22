@@ -83,22 +83,21 @@ func (f *FieldScheduleService) GenerateScheduleForOneMonth(ctx context.Context, 
 		return err
 	}
 	numberOfDays := 30
-	fieldSchedules := make([]models.FieldSchedule, 0, numberOfDays)
+	fieldSchedules := make([]models.FieldSchedule, 0, numberOfDays*len(times))
 	now := time.Now().Add(time.Duration(1) * 24 * time.Hour)
+	startDate := now.Format(time.DateOnly)
+	endDate := now.AddDate(0, 0, numberOfDays-1).Format(time.DateOnly)
+	existingSchedules, err := f.repository.GetFieldSchedule().
+		FindAllByFieldIDAndDateRange(ctx, int(field.ID), startDate, endDate)
+	if err != nil {
+		return err
+	}
+	if len(existingSchedules) > 0 {
+		return errFieldSchedule.ErrFieldScheduleIsExist
+	}
 	for i := 0; i < numberOfDays; i++ {
 		currentDate := now.AddDate(0, 0, i)
 		for _, item := range times {
-			schedule, err := f.repository.GetFieldSchedule().
-				FindByDateAndTimeId(
-					ctx, currentDate.Format(time.DateOnly), int(item.ID), int(field.ID),
-				)
-			if err != nil {
-				return err
-			}
-
-			if schedule != nil {
-				return errFieldSchedule.ErrFieldScheduleIsExist
-			}
 			fieldSchedules = append(fieldSchedules, models.FieldSchedule{
 				UUID:    uuid.New(),
 				FieldID: field.ID,
