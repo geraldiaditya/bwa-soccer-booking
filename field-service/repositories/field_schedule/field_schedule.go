@@ -9,9 +9,17 @@ import (
 	errFieldSchedule "field-service/constants/error/field_schedule"
 	"field-service/domain/dto"
 	"field-service/domain/models"
-	"fmt"
 	"gorm.io/gorm"
+	"strings"
 )
+
+const defaultFieldScheduleSort = "created_at desc"
+
+var allowedFieldScheduleSortColumns = map[string]struct{}{
+	"created_at": {},
+	"date":       {},
+	"status":     {},
+}
 
 type IFieldScheduleRepository interface {
 	FindAllWithPagination(context.Context, *dto.FieldScheduleRequestParam) ([]models.FieldSchedule, int64, error)
@@ -38,23 +46,14 @@ func (f *FieldScheduleRepository) FindAllWithPagination(
 ) ([]models.FieldSchedule, int64, error) {
 	var (
 		fieldSchedules []models.FieldSchedule
-		sort           string
 		total          int64
 	)
-	sort = "created_at desc"
-	if param.SortColumn != nil {
-		sort = fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
-	}
 
-	limit := param.Limit
-	offset := (param.Page - 1) * limit
 	err := f.db.
 		WithContext(ctx).
 		Preload("Field").
 		Preload("Time").
-		Limit(limit).
-		Offset(offset).
-		Order(sort).
+		Scopes(applyFieldSchedulePagination(param)).
 		Find(&fieldSchedules).
 		Error
 	if err != nil {
@@ -62,7 +61,7 @@ func (f *FieldScheduleRepository) FindAllWithPagination(
 	}
 	err = f.db.
 		WithContext(ctx).
-		Model(&fieldSchedules).
+		Model(&models.FieldSchedule{}).
 		Count(&total).
 		Error
 	if err != nil {
@@ -164,4 +163,37 @@ func (f *FieldScheduleRepository) Delete(ctx context.Context, uuid string) error
 		return errWrap.WrapError(errorConstants.ErrSQLError)
 	}
 	return nil
+}
+
+func applyFieldSchedulePagination(param *dto.FieldScheduleRequestParam) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		limit, offset := fieldSchedulePagination(param)
+		return db.
+			Limit(limit).
+			Offset(offset).
+			Order(fieldScheduleSort(param))
+	}
+}
+
+func fieldSchedulePagination(param *dto.FieldScheduleRequestParam) (int, int) {
+	page := param.Page
+	if page < 1 {
+		page = 1
+	}
+	return param.Limit, (page - 1) * param.Limit
+}
+
+func fieldScheduleSort(param *dto.FieldScheduleRequestParam) string {
+	if param.SortColumn == nil || param.SortOrder == nil {
+		return defaultFieldScheduleSort
+	}
+	column := *param.SortColumn
+	if _, ok := allowedFieldScheduleSortColumns[column]; !ok {
+		return defaultFieldScheduleSort
+	}
+	order := "desc"
+	if strings.EqualFold(*param.SortOrder, "asc") {
+		order = "asc"
+	}
+	return column + " " + order
 }
