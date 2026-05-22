@@ -4,6 +4,7 @@ import (
 	"context"
 	"field-service/common/utils"
 	"field-service/constants"
+	errorConstants "field-service/constants/error"
 	errFieldSchedule "field-service/constants/error/field_schedule"
 	"field-service/domain/dto"
 	"field-service/domain/models"
@@ -124,7 +125,10 @@ func (f *FieldScheduleService) Create(ctx context.Context, request *dto.FieldSch
 			return err
 		}
 		fieldSchedules := make([]models.FieldSchedule, 0, len(request.TimeIDs))
-		dateParsed, _ := time.Parse(time.DateOnly, request.Date)
+		dateParsed, err := time.Parse(time.DateOnly, request.Date)
+		if err != nil {
+			return errorConstants.ErrRequestValidation
+		}
 		for _, timeID := range request.TimeIDs {
 			scheduleTime, err := repository.GetTime().FindByUUID(ctx, timeID)
 			if err != nil {
@@ -179,20 +183,12 @@ func (f *FieldScheduleService) Update(
 			return err
 		}
 		if isTimeExist != nil && request.Date != fieldSchedule.Date.Format(time.DateOnly) {
-			checkDate, err := repository.GetFieldSchedule().FindByDateAndTimeId(
-				ctx,
-				request.Date,
-				int(scheduleTime.ID),
-				int(fieldSchedule.Field.ID),
-			)
-			if err != nil {
-				return err
-			}
-			if checkDate != nil {
-				return errFieldSchedule.ErrFieldScheduleIsExist
-			}
+			return errFieldSchedule.ErrFieldScheduleIsExist
 		}
-		dateParsed, _ := time.Parse(time.DateOnly, request.Date)
+		dateParsed, err := time.Parse(time.DateOnly, request.Date)
+		if err != nil {
+			return errorConstants.ErrRequestValidation
+		}
 		fieldResult, err := repository.GetFieldSchedule().Update(ctx, uuid, &models.FieldSchedule{
 			Date:   dateParsed,
 			TimeID: scheduleTime.ID,

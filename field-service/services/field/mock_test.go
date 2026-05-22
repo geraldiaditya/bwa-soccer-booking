@@ -56,7 +56,8 @@ func (m *mockFieldRepository) Delete(ctx context.Context, uuid string) error {
 }
 
 type mockRepositoryRegistry struct {
-	fieldRepo *mockFieldRepository
+	fieldRepo        *mockFieldRepository
+	transactionCalls int
 }
 
 func newMockRegistry() *mockRepositoryRegistry {
@@ -76,6 +77,7 @@ func (m *mockRepositoryRegistry) GetTime() repoTime.ITimeRepository {
 }
 
 func (m *mockRepositoryRegistry) WithTransaction(ctx context.Context, fn func(repositories.IRepositoryRegistry) error) error {
+	m.transactionCalls++
 	return fn(m)
 }
 
