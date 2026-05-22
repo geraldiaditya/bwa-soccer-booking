@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"field-service/constants"
 	errField "field-service/constants/error/field"
 	errFieldSchedule "field-service/constants/error/field_schedule"
@@ -81,6 +82,8 @@ func TestGenerateScheduleForOneMonth_DocumentsBusinessScenarios(t *testing.T) {
 		{ID: 1, UUID: uuid.New()},
 		{ID: 2, UUID: uuid.New()},
 	}
+	timeIDs := []uint{1, 2}
+	rangeQueryErr := errors.New("range query failed")
 
 	tests := []struct {
 		name      string
@@ -93,12 +96,13 @@ func TestGenerateScheduleForOneMonth_DocumentsBusinessScenarios(t *testing.T) {
 				reg.fieldRepo.On("FindByUUID", ctx, fieldID).Return(field, nil)
 				reg.timeRepo.On("FindAll", ctx).Return(times, nil)
 				reg.fieldScheduleRepo.On(
-					"FindAllByFieldIDAndDateRange",
+					"ExistsByFieldIDDateRangeAndTimeIDs",
 					ctx,
 					int(field.ID),
 					mock.AnythingOfType("string"),
 					mock.AnythingOfType("string"),
-				).Return([]models.FieldSchedule{}, nil).Once()
+					timeIDs,
+				).Return(false, nil).Once()
 				reg.fieldScheduleRepo.On("Create", ctx, mock.MatchedBy(func(schedules []models.FieldSchedule) bool {
 					if len(schedules) != 30*len(times) {
 						return false
@@ -125,14 +129,31 @@ func TestGenerateScheduleForOneMonth_DocumentsBusinessScenarios(t *testing.T) {
 				reg.fieldRepo.On("FindByUUID", ctx, fieldID).Return(field, nil)
 				reg.timeRepo.On("FindAll", ctx).Return(times, nil)
 				reg.fieldScheduleRepo.On(
-					"FindAllByFieldIDAndDateRange",
+					"ExistsByFieldIDDateRangeAndTimeIDs",
 					ctx,
 					int(field.ID),
 					mock.AnythingOfType("string"),
 					mock.AnythingOfType("string"),
-				).Return([]models.FieldSchedule{{ID: 1, FieldID: field.ID}}, nil).Once()
+					timeIDs,
+				).Return(true, nil).Once()
 			},
 			wantError: errFieldSchedule.ErrFieldScheduleIsExist,
+		},
+		{
+			name: "range conflict lookup error is propagated before create",
+			arrange: func(reg *mockRepositoryRegistry) {
+				reg.fieldRepo.On("FindByUUID", ctx, fieldID).Return(field, nil)
+				reg.timeRepo.On("FindAll", ctx).Return(times, nil)
+				reg.fieldScheduleRepo.On(
+					"ExistsByFieldIDDateRangeAndTimeIDs",
+					ctx,
+					int(field.ID),
+					mock.AnythingOfType("string"),
+					mock.AnythingOfType("string"),
+					timeIDs,
+				).Return(false, rangeQueryErr).Once()
+			},
+			wantError: rangeQueryErr,
 		},
 	}
 

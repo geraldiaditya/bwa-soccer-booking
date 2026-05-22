@@ -24,7 +24,7 @@ var allowedFieldScheduleSortColumns = map[string]struct{}{
 type IFieldScheduleRepository interface {
 	FindAllWithPagination(context.Context, *dto.FieldScheduleRequestParam) ([]models.FieldSchedule, int64, error)
 	FindAllByFieldIdAndDate(context.Context, int, string) ([]models.FieldSchedule, error)
-	FindAllByFieldIDAndDateRange(context.Context, int, string, string) ([]models.FieldSchedule, error)
+	ExistsByFieldIDDateRangeAndTimeIDs(context.Context, int, string, string, []uint) (bool, error)
 	FindByUUID(context.Context, string) (*models.FieldSchedule, error)
 	FindByDateAndTimeId(context.Context, string, int, int) (*models.FieldSchedule, error)
 	Create(context.Context, []models.FieldSchedule) error
@@ -89,23 +89,27 @@ func (f *FieldScheduleRepository) FindAllByFieldIdAndDate(ctx context.Context, f
 	return fieldSchedules, nil
 }
 
-func (f *FieldScheduleRepository) FindAllByFieldIDAndDateRange(
+func (f *FieldScheduleRepository) ExistsByFieldIDDateRangeAndTimeIDs(
 	ctx context.Context,
 	fieldID int,
 	startDate string,
 	endDate string,
-) ([]models.FieldSchedule, error) {
-	var fieldSchedules []models.FieldSchedule
+	timeIDs []uint,
+) (bool, error) {
+	var count int64
 	err := f.db.
 		WithContext(ctx).
+		Model(&models.FieldSchedule{}).
 		Where("field_id = ?", fieldID).
 		Where("date BETWEEN ? AND ?", startDate, endDate).
-		Find(&fieldSchedules).
+		Where("time_id IN ?", timeIDs).
+		Limit(1).
+		Count(&count).
 		Error
 	if err != nil {
-		return nil, errWrap.WrapError(errorConstants.ErrSQLError)
+		return false, errWrap.WrapError(errorConstants.ErrSQLError)
 	}
-	return fieldSchedules, nil
+	return count > 0, nil
 }
 
 func (f *FieldScheduleRepository) FindByUUID(ctx context.Context, uuid string) (*models.FieldSchedule, error) {
