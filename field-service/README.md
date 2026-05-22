@@ -73,7 +73,7 @@ Admin-only endpoints require the `Admin` role. Some paginated reads allow both `
 | PUT | `/api/v1/field/:uuid` | signed request + Admin JWT | Update field |
 | DELETE | `/api/v1/field/:uuid` | signed request + Admin JWT | Delete field |
 | GET | `/api/v1/field/schedule/lists/:uuid` | signed request | List schedules for a field and date |
-| PATCH | `/api/v1/field/schedule/status` | signed request | Mark schedules as booked |
+| PATCH | `/api/v1/field/schedule/status` | signed internal request | Mark schedules as booked from a booking/order flow |
 | GET | `/api/v1/field/schedule/pagination` | signed request + Admin/Customer JWT | Paginated schedules |
 | GET | `/api/v1/field/schedule/:uuid` | signed request + Admin/Customer JWT | Get schedule detail |
 | POST | `/api/v1/field/schedule` | signed request + Admin JWT | Create schedules for selected time slots |
@@ -104,7 +104,7 @@ Fill in database credentials, `signatureKey`, user-service host/signature key, r
 Install dependencies:
 
 ```bash
-go mod download
+go mod tidy
 ```
 
 Run with hot reload:
@@ -141,6 +141,10 @@ The application runs `AutoMigrate` during startup for:
 - `times`
 
 The schedule model indexes `field_id` and `date` for lookup-heavy booking flows.
+
+There is no active seed command in the current Cobra entrypoint. For local development, create time slots through the `POST /api/v1/time` admin endpoint or insert controlled seed rows with your normal database tooling before creating schedules.
+
+Booking schedule dates are returned in short Indonesian display format, for example `22 Mei`.
 
 ## Testing
 
