@@ -1,14 +1,13 @@
 package controllers
 
 import (
-	errWrap "field-service/common/error"
+	requestHelper "field-service/common/request"
 	"field-service/common/response"
-	errConstant "field-service/constants/error"
 	"field-service/domain/dto"
 	"field-service/services"
-	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ITimeController interface {
@@ -36,11 +35,7 @@ type TimeController struct {
 func (t *TimeController) GetAll(context *gin.Context) {
 	result, err := t.service.GetTime().GetAll(context)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -62,11 +57,7 @@ func (t *TimeController) GetAll(context *gin.Context) {
 func (t *TimeController) GetByUUID(context *gin.Context) {
 	result, err := t.service.GetTime().GetByUUID(context, context.Param("uuid"))
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -87,36 +78,12 @@ func (t *TimeController) GetByUUID(context *gin.Context) {
 // @Router /times [post]
 func (t *TimeController) Create(context *gin.Context) {
 	var request dto.TimeRequest
-	err := context.ShouldBindJSON(&request)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(request)
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindJSON(context, &request) {
 		return
 	}
 	result, err := t.service.GetTime().Create(context, &request)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 

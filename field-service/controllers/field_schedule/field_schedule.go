@@ -1,14 +1,13 @@
 package controllers
 
 import (
-	errWrap "field-service/common/error"
+	requestHelper "field-service/common/request"
 	"field-service/common/response"
-	errConstant "field-service/constants/error"
 	"field-service/domain/dto"
 	"field-service/services"
-	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type IFieldScheduleController interface {
@@ -44,36 +43,12 @@ func NewFieldScheduleController(service services.IServiceRegistry) IFieldSchedul
 // @Router /field-schedules [get]
 func (f *FieldScheduleController) GetAllWithPagination(context *gin.Context) {
 	var params dto.FieldScheduleRequestParam
-	err := context.ShouldBindQuery(&params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(params)
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindQuery(context, &params) {
 		return
 	}
 	result, err := f.service.GetFieldSchedule().GetAllWithPagination(context, &params)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -95,36 +70,12 @@ func (f *FieldScheduleController) GetAllWithPagination(context *gin.Context) {
 // @Router /field-schedules/field/{uuid} [get]
 func (f *FieldScheduleController) GetAllByFieldIdAndDate(context *gin.Context) {
 	var params dto.FieldScheduleByFieldIDAndDateRequestParam
-	err := context.ShouldBindQuery(&params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(params)
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindQuery(context, &params) {
 		return
 	}
 	result, err := f.service.GetFieldSchedule().GetAllByFieldIdAndDate(context, context.Param("uuid"), params.Date)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 
@@ -148,11 +99,7 @@ func (f *FieldScheduleController) GetAllByFieldIdAndDate(context *gin.Context) {
 func (f *FieldScheduleController) GetByUUID(context *gin.Context) {
 	result, err := f.service.GetFieldSchedule().GetByUUID(context, context.Param("uuid"))
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -173,37 +120,12 @@ func (f *FieldScheduleController) GetByUUID(context *gin.Context) {
 // @Router /field-schedules [post]
 func (f *FieldScheduleController) Create(context *gin.Context) {
 	var params dto.FieldScheduleRequest
-	err := context.ShouldBindJSON(&params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+	if !requestHelper.BindJSON(context, &params) {
 		return
 	}
-	validate := validator.New()
-	err = validate.Struct(params)
-
+	err := f.service.GetFieldSchedule().Create(context, &params)
 	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
-		return
-	}
-	err = f.service.GetFieldSchedule().Create(context, &params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -225,37 +147,12 @@ func (f *FieldScheduleController) Create(context *gin.Context) {
 // @Router /field-schedules/{uuid} [put]
 func (f *FieldScheduleController) Update(context *gin.Context) {
 	var params dto.UpdateFieldScheduleRequest
-	err := context.ShouldBindJSON(&params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(params)
-
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindJSON(context, &params) {
 		return
 	}
 	result, err := f.service.GetFieldSchedule().Update(context, context.Param("uuid"), &params)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -276,37 +173,12 @@ func (f *FieldScheduleController) Update(context *gin.Context) {
 // @Router /field-schedules/status [put]
 func (f *FieldScheduleController) UpdateStatus(context *gin.Context) {
 	var request dto.UpdateStatusFieldScheduleRequest
-	err := context.ShouldBindJSON(&request)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+	if !requestHelper.BindJSON(context, &request) {
 		return
 	}
-	validate := validator.New()
-	err = validate.Struct(request)
-
+	err := f.service.GetFieldSchedule().UpdateStatus(context, &request)
 	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
-		return
-	}
-	err = f.service.GetFieldSchedule().UpdateStatus(context, &request)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -327,11 +199,7 @@ func (f *FieldScheduleController) UpdateStatus(context *gin.Context) {
 func (f *FieldScheduleController) Delete(context *gin.Context) {
 	err := f.service.GetFieldSchedule().Delete(context, context.Param("uuid"))
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 
@@ -352,37 +220,12 @@ func (f *FieldScheduleController) Delete(context *gin.Context) {
 // @Router /field-schedules/generate [post]
 func (f *FieldScheduleController) GenerateScheduleForOneMonth(context *gin.Context) {
 	var params dto.GenerateFieldScheduleForOneMonthRequest
-	err := context.ShouldBindJSON(&params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+	if !requestHelper.BindJSON(context, &params) {
 		return
 	}
-	validate := validator.New()
-	err = validate.Struct(params)
-
+	err := f.service.GetFieldSchedule().GenerateScheduleForOneMonth(context, &params)
 	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
-		return
-	}
-	err = f.service.GetFieldSchedule().GenerateScheduleForOneMonth(context, &params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{

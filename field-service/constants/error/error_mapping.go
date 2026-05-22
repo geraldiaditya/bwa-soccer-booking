@@ -1,15 +1,22 @@
 package error
 
 import (
+	"errors"
 	errField "field-service/constants/error/field"
 	errFieldSchedule "field-service/constants/error/field_schedule"
 	errTime "field-service/constants/error/time"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 func ErrStatusCode(err error) int {
 	if err == nil {
 		return http.StatusOK
+	}
+	var validationErrors validator.ValidationErrors
+	if errors.As(err, &validationErrors) {
+		return http.StatusUnprocessableEntity
 	}
 
 	switch err.Error() {
