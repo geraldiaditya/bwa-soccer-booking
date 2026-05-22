@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	errField "field-service/constants/error/field"
+	"field-service/domain/dto"
 	"field-service/domain/models"
 	"testing"
 
@@ -53,6 +54,23 @@ func TestDelete_Success(t *testing.T) {
 	err := svc.Delete(context.Background(), id.String())
 
 	assert.NoError(t, err)
+}
+
+func TestUpdate_UsesExistingFieldUUID(t *testing.T) {
+	svc, reg, _ := newSvc()
+	id := uuid.New()
+	existingField := &models.Field{UUID: id, Images: []string{"old-image"}}
+	updatedField := &models.Field{Name: "Updated Field", Code: "UF", PricePerHour: 120000, Images: []string{"old-image"}}
+	request := &dto.UpdateFieldRequest{Name: "Updated Field", Code: "UF", PricePerHour: 120000}
+
+	reg.fieldRepo.On("FindByUUID", context.Background(), id.String()).Return(existingField, nil)
+	reg.fieldRepo.On("Update", context.Background(), id.String(), updatedField).Return(updatedField, nil)
+
+	resp, err := svc.Update(context.Background(), id.String(), request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, id, resp.UUID)
+	assert.Equal(t, "Updated Field", resp.Name)
 }
 
 func TestDelete_NotFound(t *testing.T) {

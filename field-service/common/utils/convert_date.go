@@ -24,10 +24,8 @@ func ConvertMonthName(inputDate string) string {
 		"Nov": "Nov",
 		"Dec": "Des",
 	}
-	formattedDate := date.Format("02 Jan")
-	day := formattedDate[:3]
-	month := formattedDate[3:]
-	formattedDate = fmt.Sprintf("%s %s", day, indonesiaMonth[month])
-	return formattedDate
+	day := date.Format("02")
+	month := date.Format("Jan")
+	return fmt.Sprintf("%s %s", day, indonesiaMonth[month])
 
 }
