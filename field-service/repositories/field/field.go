@@ -8,12 +8,18 @@ import (
 	errField "field-service/constants/error/field"
 	"field-service/domain/dto"
 	"field-service/domain/models"
-	"fmt"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"strings"
 )
 
 const defaultFieldSort = "created_at desc"
+
+var allowedFieldSortColumns = map[string]struct{}{
+	"created_at":     {},
+	"name":           {},
+	"price_per_hour": {},
+}
 
 type FieldRepository struct {
 	db *gorm.DB
@@ -127,16 +133,33 @@ func NewFieldRepository(db *gorm.DB) IFieldRepository {
 
 func applyFieldPagination(param *dto.FieldRequestParam) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
+		limit, offset := fieldPagination(param)
 		return db.
-			Limit(param.Limit).
-			Offset((param.Page - 1) * param.Limit).
+			Limit(limit).
+			Offset(offset).
 			Order(fieldSort(param))
 	}
+}
+
+func fieldPagination(param *dto.FieldRequestParam) (int, int) {
+	page := param.Page
+	if page < 1 {
+		page = 1
+	}
+	return param.Limit, (page - 1) * param.Limit
 }
 
 func fieldSort(param *dto.FieldRequestParam) string {
 	if param.SortColumn == nil || param.SortOrder == nil {
 		return defaultFieldSort
 	}
-	return fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
+	column := *param.SortColumn
+	if _, ok := allowedFieldSortColumns[column]; !ok {
+		return defaultFieldSort
+	}
+	order := "desc"
+	if strings.EqualFold(*param.SortOrder, "asc") {
+		order = "asc"
+	}
+	return column + " " + order
 }
