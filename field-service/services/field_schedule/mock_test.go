@@ -5,6 +5,7 @@ import (
 	"field-service/constants"
 	"field-service/domain/dto"
 	"field-service/domain/models"
+	"field-service/repositories"
 	repoField "field-service/repositories/field"
 	repoFieldSchedule "field-service/repositories/field_schedule"
 	repoTime "field-service/repositories/time"
@@ -165,4 +166,8 @@ func (m *mockRepositoryRegistry) GetFieldSchedule() repoFieldSchedule.IFieldSche
 
 func (m *mockRepositoryRegistry) GetTime() repoTime.ITimeRepository {
 	return m.timeRepo
+}
+
+func (m *mockRepositoryRegistry) WithTransaction(ctx context.Context, fn func(repositories.IRepositoryRegistry) error) error {
+	return fn(m)
 }
