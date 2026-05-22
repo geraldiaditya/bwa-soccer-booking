@@ -26,17 +26,7 @@ func (t *TimeService) GetAll(ctx context.Context) ([]dto.TimeResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	timeResult := make([]dto.TimeResponse, 0, len(times))
-	for _, time := range times {
-		timeResult = append(timeResult, dto.TimeResponse{
-			UUID:      time.UUID,
-			StartTime: time.StartTime,
-			EndTime:   time.EndTime,
-			CreatedAt: time.CreatedAt,
-			UpdatedAt: time.UpdatedAt,
-		})
-	}
-	return timeResult, nil
+	return toTimeResponses(times), nil
 }
 
 func (t *TimeService) GetByUUID(ctx context.Context, uuid string) (*dto.TimeResponse, error) {
@@ -44,14 +34,8 @@ func (t *TimeService) GetByUUID(ctx context.Context, uuid string) (*dto.TimeResp
 	if err != nil {
 		return nil, err
 	}
-	timeResult := dto.TimeResponse{
-		UUID:      time.UUID,
-		StartTime: time.StartTime,
-		EndTime:   time.EndTime,
-		CreatedAt: time.CreatedAt,
-		UpdatedAt: time.UpdatedAt,
-	}
-	return &timeResult, nil
+	response := toTimeResponse(*time)
+	return &response, nil
 }
 
 func (t *TimeService) Create(ctx context.Context, request *dto.TimeRequest) (*dto.TimeResponse, error) {
@@ -63,12 +47,6 @@ func (t *TimeService) Create(ctx context.Context, request *dto.TimeRequest) (*dt
 	if err != nil {
 		return nil, err
 	}
-	response := dto.TimeResponse{
-		UUID:      time.UUID,
-		StartTime: time.StartTime,
-		EndTime:   time.EndTime,
-		CreatedAt: time.CreatedAt,
-		UpdatedAt: time.UpdatedAt,
-	}
+	response := toTimeResponse(*time)
 	return &response, nil
 }

@@ -8,9 +8,9 @@ import (
 	"field-service/domain/dto"
 	"field-service/domain/models"
 	"field-service/repositories"
-	"fmt"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type IFieldScheduleService interface {
@@ -40,24 +40,11 @@ func (f *FieldScheduleService) GetAllWithPagination(
 	if err != nil {
 		return nil, err
 	}
-	fieldScheduleResults := make([]dto.FieldScheduleResponse, 0, len(fieldSchedules))
-	for _, schedule := range fieldSchedules {
-		fieldScheduleResults = append(fieldScheduleResults, dto.FieldScheduleResponse{
-			UUID:         schedule.UUID,
-			FieldName:    schedule.Field.Name,
-			PricePerHour: schedule.Field.PricePerHour,
-			Date:         schedule.Date.Format("2006-01-02"),
-			Status:       schedule.Status.GetStatusString(),
-			Time:         fmt.Sprintf("%s - %s", schedule.Time.StartTime, schedule.Time.EndTime),
-			CreatedAt:    schedule.CreatedAt,
-			UpdatedAt:    schedule.UpdatedAt,
-		})
-	}
 	pagination := utils.PaginationParam{
 		Count: total,
 		Page:  param.Page,
 		Limit: param.Limit,
-		Data:  fieldScheduleResults,
+		Data:  toFieldScheduleResponses(fieldSchedules),
 	}
 	response := utils.GeneratePagination(pagination)
 	return &response, nil
@@ -74,18 +61,7 @@ func (f *FieldScheduleService) GetAllByFieldIdAndDate(
 	if err != nil {
 		return nil, err
 	}
-	fieldScheduleResults := make([]dto.FieldScheduleForBookingResponse, 0, len(fieldSchedules))
-	for _, schedule := range fieldSchedules {
-		pricePerHour := float64(schedule.Field.PricePerHour)
-		fieldScheduleResults = append(fieldScheduleResults, dto.FieldScheduleForBookingResponse{
-			UUID:         schedule.UUID,
-			Date:         utils.ConvertMonthName(schedule.Date.Format(time.DateOnly)),
-			Time:         schedule.Time.StartTime,
-			Status:       schedule.Status.GetStatusString(),
-			PricePerHour: utils.RupiahFormat(&pricePerHour),
-		})
-	}
-	return fieldScheduleResults, nil
+	return toFieldScheduleForBookingResponses(fieldSchedules), nil
 }
 
 func (f *FieldScheduleService) GetByUUID(ctx context.Context, uuid string) (*dto.FieldScheduleResponse, error) {
@@ -93,16 +69,7 @@ func (f *FieldScheduleService) GetByUUID(ctx context.Context, uuid string) (*dto
 	if err != nil {
 		return nil, err
 	}
-	response := dto.FieldScheduleResponse{
-		UUID:         fieldSchedule.UUID,
-		FieldName:    fieldSchedule.Field.Name,
-		PricePerHour: fieldSchedule.Field.PricePerHour,
-		Date:         fieldSchedule.Date.Format(time.DateOnly),
-		Status:       fieldSchedule.Status.GetStatusString(),
-		Time:         fmt.Sprintf("%s - %s", fieldSchedule.Time.StartTime, fieldSchedule.Time.EndTime),
-		CreatedAt:    fieldSchedule.CreatedAt,
-		UpdatedAt:    fieldSchedule.UpdatedAt,
-	}
+	response := toFieldScheduleResponse(*fieldSchedule)
 	return &response, nil
 }
 
@@ -227,16 +194,7 @@ func (f *FieldScheduleService) Update(
 	if err != nil {
 		return nil, err
 	}
-	response := dto.FieldScheduleResponse{
-		UUID:         fieldResult.UUID,
-		FieldName:    fieldResult.Field.Name,
-		Date:         fieldResult.Date.Format(time.DateOnly),
-		PricePerHour: fieldResult.Field.PricePerHour,
-		Status:       fieldResult.Status.GetStatusString(),
-		Time:         fmt.Sprintf("%s - %s", scheduleTime.StartTime, scheduleTime.EndTime),
-		CreatedAt:    fieldResult.CreatedAt,
-		UpdatedAt:    fieldResult.UpdatedAt,
-	}
+	response := toFieldScheduleResponseWithTime(*fieldResult, *scheduleTime)
 	return &response, nil
 }
 

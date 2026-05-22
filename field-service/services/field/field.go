@@ -10,7 +10,6 @@ import (
 	"field-service/domain/models"
 	"field-service/repositories"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"mime/multipart"
 	"path"
@@ -44,23 +43,11 @@ func (f *FieldService) GetAllWithPagination(
 		return nil, err
 	}
 
-	fieldResult := make([]dto.FieldResponse, 0, len(fields))
-	for _, field := range fields {
-		fieldResult = append(fieldResult, dto.FieldResponse{
-			UUID:         field.UUID,
-			Code:         field.Code,
-			Name:         field.Name,
-			PricePerHour: field.PricePerHour,
-			Images:       field.Images,
-			CreatedAt:    field.CreatedAt,
-			UpdatedAt:    field.UpdatedAt,
-		})
-	}
 	pagination := &utils.PaginationParam{
 		Count: total,
 		Page:  param.Page,
 		Limit: param.Limit,
-		Data:  fieldResult,
+		Data:  toFieldResponses(fields),
 	}
 
 	response := utils.GeneratePagination(*pagination)
@@ -73,17 +60,7 @@ func (f *FieldService) GetAllWithoutPagination(ctx context.Context) ([]dto.Field
 		return nil, err
 	}
 
-	fieldResult := make([]dto.FieldResponse, 0, len(fields))
-	for _, field := range fields {
-		fieldResult = append(fieldResult, dto.FieldResponse{
-			UUID:         field.UUID,
-			Name:         field.Name,
-			PricePerHour: field.PricePerHour,
-			Images:       field.Images,
-		})
-	}
-
-	return fieldResult, nil
+	return toFieldSummaryResponses(fields), nil
 }
 
 func (f *FieldService) GetByUUID(ctx context.Context, uuid string) (*dto.FieldResponse, error) {
@@ -91,16 +68,8 @@ func (f *FieldService) GetByUUID(ctx context.Context, uuid string) (*dto.FieldRe
 	if err != nil {
 		return nil, err
 	}
-	fieldResult := dto.FieldResponse{
-		UUID:         field.UUID,
-		Code:         field.Code,
-		Name:         field.Name,
-		PricePerHour: field.PricePerHour,
-		Images:       field.Images,
-		CreatedAt:    field.CreatedAt,
-		UpdatedAt:    field.UpdatedAt,
-	}
-	return &fieldResult, nil
+	response := toFieldResponse(*field)
+	return &response, nil
 }
 
 func (f *FieldService) Create(ctx context.Context, request *dto.FieldRequest) (*dto.FieldResponse, error) {
@@ -117,16 +86,8 @@ func (f *FieldService) Create(ctx context.Context, request *dto.FieldRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	response := &dto.FieldResponse{
-		UUID:         field.UUID,
-		Code:         field.Code,
-		Name:         field.Name,
-		PricePerHour: field.PricePerHour,
-		Images:       field.Images,
-		CreatedAt:    field.CreatedAt,
-		UpdatedAt:    field.UpdatedAt,
-	}
-	return response, nil
+	response := toFieldResponse(*field)
+	return &response, nil
 }
 
 func (f *FieldService) Update(ctx context.Context, uuidParams string, request *dto.UpdateFieldRequest) (*dto.FieldResponse, error) {
@@ -152,16 +113,9 @@ func (f *FieldService) Update(ctx context.Context, uuidParams string, request *d
 	if err != nil {
 		return nil, err
 	}
-	uuidParsed, _ := uuid.Parse(uuidParams)
-	return &dto.FieldResponse{
-		UUID:         uuidParsed,
-		Code:         fieldResult.Code,
-		Name:         fieldResult.Name,
-		PricePerHour: fieldResult.PricePerHour,
-		Images:       fieldResult.Images,
-		CreatedAt:    fieldResult.CreatedAt,
-		UpdatedAt:    fieldResult.UpdatedAt,
-	}, nil
+	fieldResult.UUID = field.UUID
+	response := toFieldResponse(*fieldResult)
+	return &response, nil
 }
 
 func (f *FieldService) Delete(ctx context.Context, uuid string) error {
