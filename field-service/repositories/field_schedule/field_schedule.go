@@ -13,6 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const defaultFieldScheduleSort = "created_at desc"
+
 type IFieldScheduleRepository interface {
 	FindAllWithPagination(context.Context, *dto.FieldScheduleRequestParam) ([]models.FieldSchedule, int64, error)
 	FindAllByFieldIdAndDate(context.Context, int, string) ([]models.FieldSchedule, error)
@@ -38,23 +40,14 @@ func (f *FieldScheduleRepository) FindAllWithPagination(
 ) ([]models.FieldSchedule, int64, error) {
 	var (
 		fieldSchedules []models.FieldSchedule
-		sort           string
 		total          int64
 	)
-	sort = "created_at desc"
-	if param.SortColumn != nil {
-		sort = fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
-	}
 
-	limit := param.Limit
-	offset := (param.Page - 1) * limit
 	err := f.db.
 		WithContext(ctx).
 		Preload("Field").
 		Preload("Time").
-		Limit(limit).
-		Offset(offset).
-		Order(sort).
+		Scopes(applyFieldSchedulePagination(param)).
 		Find(&fieldSchedules).
 		Error
 	if err != nil {
@@ -62,7 +55,7 @@ func (f *FieldScheduleRepository) FindAllWithPagination(
 	}
 	err = f.db.
 		WithContext(ctx).
-		Model(&fieldSchedules).
+		Model(&models.FieldSchedule{}).
 		Count(&total).
 		Error
 	if err != nil {
@@ -164,4 +157,20 @@ func (f *FieldScheduleRepository) Delete(ctx context.Context, uuid string) error
 		return errWrap.WrapError(errorConstants.ErrSQLError)
 	}
 	return nil
+}
+
+func applyFieldSchedulePagination(param *dto.FieldScheduleRequestParam) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.
+			Limit(param.Limit).
+			Offset((param.Page - 1) * param.Limit).
+			Order(fieldScheduleSort(param))
+	}
+}
+
+func fieldScheduleSort(param *dto.FieldScheduleRequestParam) string {
+	if param.SortColumn == nil || param.SortOrder == nil {
+		return defaultFieldScheduleSort
+	}
+	return fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
 }

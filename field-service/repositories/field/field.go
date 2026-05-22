@@ -13,6 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const defaultFieldSort = "created_at desc"
+
 type FieldRepository struct {
 	db *gorm.DB
 }
@@ -23,21 +25,12 @@ func (f *FieldRepository) FindAllWithPagination(
 ) ([]models.Field, int64, error) {
 	var (
 		fields []models.Field
-		sort   string
 		total  int64
 	)
-	sort = "create_at desc"
-	if param.SortColumn != nil {
-		sort = fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
-	}
 
-	limit := param.Limit
-	offset := (param.Page - 1) * limit
 	err := f.db.
 		WithContext(ctx).
-		Limit(limit).
-		Offset(offset).
-		Order(sort).
+		Scopes(applyFieldPagination(param)).
 		Find(&fields).
 		Error
 	if err != nil {
@@ -45,7 +38,7 @@ func (f *FieldRepository) FindAllWithPagination(
 	}
 	err = f.db.
 		WithContext(ctx).
-		Model(&fields).
+		Model(&models.Field{}).
 		Count(&total).
 		Error
 	if err != nil {
@@ -130,4 +123,20 @@ type IFieldRepository interface {
 
 func NewFieldRepository(db *gorm.DB) IFieldRepository {
 	return &FieldRepository{db: db}
+}
+
+func applyFieldPagination(param *dto.FieldRequestParam) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.
+			Limit(param.Limit).
+			Offset((param.Page - 1) * param.Limit).
+			Order(fieldSort(param))
+	}
+}
+
+func fieldSort(param *dto.FieldRequestParam) string {
+	if param.SortColumn == nil || param.SortOrder == nil {
+		return defaultFieldSort
+	}
+	return fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
 }
