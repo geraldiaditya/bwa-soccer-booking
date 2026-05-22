@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	errWrap "field-service/common/error"
+	requestHelper "field-service/common/request"
 	"field-service/common/response"
 	errConstant "field-service/constants/error"
 	"field-service/domain/dto"
@@ -10,8 +10,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
 )
 
 type IFieldController interface {
@@ -77,36 +75,12 @@ func (f *FieldController) validateFiles(files []multipart.FileHeader) error {
 // @Router /fields [get]
 func (f *FieldController) GetAllWithPagination(context *gin.Context) {
 	var params dto.FieldRequestParam
-	err := context.ShouldBindQuery(&params)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(params)
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindQuery(context, &params) {
 		return
 	}
 	result, err := f.service.GetField().GetAllWithPagination(context, &params)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -127,11 +101,7 @@ func (f *FieldController) GetAllWithPagination(context *gin.Context) {
 func (f *FieldController) GetAllWithoutPagination(context *gin.Context) {
 	result, err := f.service.GetField().GetAllWithoutPagination(context)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -153,11 +123,7 @@ func (f *FieldController) GetAllWithoutPagination(context *gin.Context) {
 func (f *FieldController) GetByUUID(context *gin.Context) {
 	result, err := f.service.GetField().GetByUUID(context, context.Param("uuid"))
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -181,46 +147,18 @@ func (f *FieldController) GetByUUID(context *gin.Context) {
 // @Router /fields [post]
 func (f *FieldController) Create(context *gin.Context) {
 	var request dto.FieldRequest
-	err := context.ShouldBindWith(&request, binding.FormMultipart)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(request)
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindMultipart(context, &request) {
 		return
 	}
 
 	if err := f.validateFiles(request.Images); err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 
 	result, err := f.service.GetField().Create(context, &request)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -245,48 +183,20 @@ func (f *FieldController) Create(context *gin.Context) {
 // @Router /fields/{uuid} [put]
 func (f *FieldController) Update(context *gin.Context) {
 	var request dto.UpdateFieldRequest
-	err := context.ShouldBindWith(&request, binding.FormMultipart)
-	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
-		return
-	}
-	validate := validator.New()
-	err = validate.Struct(request)
-	if err != nil {
-		errMessage := http.StatusText(http.StatusUnprocessableEntity)
-		errResponse := errWrap.ErrValidationResponse(err)
-		response.HttpResponse(response.ParamHTTPResp{
-			Code:    errConstant.ErrStatusCode(err),
-			Err:     err,
-			Gin:     context,
-			Message: &errMessage,
-			Data:    errResponse,
-		})
+	if !requestHelper.BindMultipart(context, &request) {
 		return
 	}
 
 	if request.Images != nil {
 		if err := f.validateFiles(request.Images); err != nil {
-			response.HttpResponse(response.ParamHTTPResp{
-				Code: errConstant.ErrStatusCode(err),
-				Err:  err,
-				Gin:  context,
-			})
+			requestHelper.HandleError(context, err)
 			return
 		}
 	}
 
 	result, err := f.service.GetField().Update(context, context.Param("uuid"), &request)
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 	response.HttpResponse(response.ParamHTTPResp{
@@ -308,11 +218,7 @@ func (f *FieldController) Update(context *gin.Context) {
 func (f *FieldController) Delete(context *gin.Context) {
 	err := f.service.GetField().Delete(context, context.Param("uuid"))
 	if err != nil {
-		response.HttpResponse(response.ParamHTTPResp{
-			Code: errConstant.ErrStatusCode(err),
-			Err:  err,
-			Gin:  context,
-		})
+		requestHelper.HandleError(context, err)
 		return
 	}
 
