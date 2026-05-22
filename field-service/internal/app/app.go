@@ -124,7 +124,6 @@ func buildRouter(db *gorm.DB) *gin.Engine {
 	router := gin.Default()
 	registerGlobalMiddleware(router)
 	registerRootRoutes(router)
-	registerInlineCORS(router)
 	registerHealthRoutes(router, db)
 	registerRateLimiter(router)
 	registerAPIRoutes(router, controller, client)
@@ -152,19 +151,6 @@ func registerRootRoutes(router *gin.Engine) {
 			Status:  constants.Success,
 			Message: "Welcome to Field Service",
 		})
-	})
-}
-
-func registerInlineCORS(router *gin.Engine) {
-	router.Use(func(context *gin.Context) {
-		context.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		context.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH")
-		context.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-service-name, x-apikey, x-request-at")
-		if context.Request.Method == "OPTIONS" {
-			context.AbortWithStatus(204)
-			return
-		}
-		context.Next()
 	})
 }
 
