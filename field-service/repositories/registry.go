@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	fieldRepo "field-service/repositories/field"
 	fieldScheduleRepo "field-service/repositories/field_schedule"
 	timeRepo "field-service/repositories/time"
@@ -11,6 +12,7 @@ type IRepositoryRegistry interface {
 	GetField() fieldRepo.IFieldRepository
 	GetFieldSchedule() fieldScheduleRepo.IFieldScheduleRepository
 	GetTime() timeRepo.ITimeRepository
+	WithTransaction(context.Context, func(IRepositoryRegistry) error) error
 }
 
 func NewRepositoryRegistry(db *gorm.DB) IRepositoryRegistry {
@@ -31,4 +33,10 @@ func (r *Registry) GetFieldSchedule() fieldScheduleRepo.IFieldScheduleRepository
 
 func (r *Registry) GetTime() timeRepo.ITimeRepository {
 	return timeRepo.NewTimeRepository(r.db)
+}
+
+func (r *Registry) WithTransaction(ctx context.Context, fn func(IRepositoryRegistry) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(NewRepositoryRegistry(tx))
+	})
 }

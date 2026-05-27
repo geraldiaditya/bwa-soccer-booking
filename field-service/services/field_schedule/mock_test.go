@@ -70,6 +70,11 @@ func (m *mockFieldScheduleRepository) FindAllByFieldIdAndDate(ctx context.Contex
 	return args.Get(0).([]models.FieldSchedule), args.Error(1)
 }
 
+func (m *mockFieldScheduleRepository) ExistsByFieldIDDateRangeAndTimeIDs(ctx context.Context, fieldID int, startDate string, endDate string, timeIDs []uint) (bool, error) {
+	args := m.Called(ctx, fieldID, startDate, endDate, timeIDs)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *mockFieldScheduleRepository) FindByUUID(ctx context.Context, uuid string) (*models.FieldSchedule, error) {
 	args := m.Called(ctx, uuid)
 	if args.Get(0) == nil {
@@ -146,6 +151,7 @@ type mockRepositoryRegistry struct {
 	fieldRepo         *mockFieldRepository
 	fieldScheduleRepo *mockFieldScheduleRepository
 	timeRepo          *mockTimeRepository
+	transactionCalls  int
 }
 
 func newMockRegistry() *mockRepositoryRegistry {
@@ -169,5 +175,6 @@ func (m *mockRepositoryRegistry) GetTime() repoTime.ITimeRepository {
 }
 
 func (m *mockRepositoryRegistry) WithTransaction(ctx context.Context, fn func(repositories.IRepositoryRegistry) error) error {
+	m.transactionCalls++
 	return fn(m)
 }
