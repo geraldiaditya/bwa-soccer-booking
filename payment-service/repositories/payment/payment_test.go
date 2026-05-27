@@ -3,14 +3,12 @@ package repositories
 import (
 	"payment-service/domain/dto"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPaymentSortReturnsDefaultSort(t *testing.T) {
 	result := paymentSort(&dto.PaymentRequestParam{})
 
-	assert.Equal(t, defaultPaymentSort, result)
+	assertEqual(t, defaultPaymentSort, result)
 }
 
 func TestPaymentSortReturnsDefaultSortWhenSortParamIsPartial(t *testing.T) {
@@ -20,7 +18,7 @@ func TestPaymentSortReturnsDefaultSortWhenSortParamIsPartial(t *testing.T) {
 		SortColumn: &sortColumn,
 	})
 
-	assert.Equal(t, defaultPaymentSort, result)
+	assertEqual(t, defaultPaymentSort, result)
 }
 
 func TestPaymentSortReturnsRequestedSort(t *testing.T) {
@@ -32,7 +30,31 @@ func TestPaymentSortReturnsRequestedSort(t *testing.T) {
 		SortOrder:  &sortOrder,
 	})
 
-	assert.Equal(t, "amount asc", result)
+	assertEqual(t, "amount asc", result)
+}
+
+func TestPaymentSortReturnsDescWhenOrderIsDesc(t *testing.T) {
+	sortColumn := "amount"
+	sortOrder := "desc"
+
+	result := paymentSort(&dto.PaymentRequestParam{
+		SortColumn: &sortColumn,
+		SortOrder:  &sortOrder,
+	})
+
+	assertEqual(t, "amount desc", result)
+}
+
+func TestPaymentSortNormalizesColumnCase(t *testing.T) {
+	sortColumn := "Amount"
+	sortOrder := "asc"
+
+	result := paymentSort(&dto.PaymentRequestParam{
+		SortColumn: &sortColumn,
+		SortOrder:  &sortOrder,
+	})
+
+	assertEqual(t, "amount asc", result)
 }
 
 func TestPaymentSortReturnsDefaultSortWhenColumnIsNotAllowed(t *testing.T) {
@@ -44,7 +66,7 @@ func TestPaymentSortReturnsDefaultSortWhenColumnIsNotAllowed(t *testing.T) {
 		SortOrder:  &sortOrder,
 	})
 
-	assert.Equal(t, defaultPaymentSort, result)
+	assertEqual(t, defaultPaymentSort, result)
 }
 
 func TestPaymentSortDefaultsToDescWhenOrderIsNotAsc(t *testing.T) {
@@ -56,7 +78,7 @@ func TestPaymentSortDefaultsToDescWhenOrderIsNotAsc(t *testing.T) {
 		SortOrder:  &sortOrder,
 	})
 
-	assert.Equal(t, "amount desc", result)
+	assertEqual(t, "amount desc", result)
 }
 
 func TestPaymentPaginationKeepsOffsetNonNegative(t *testing.T) {
@@ -65,6 +87,23 @@ func TestPaymentPaginationKeepsOffsetNonNegative(t *testing.T) {
 		Limit: 10,
 	})
 
-	assert.Equal(t, 10, limit)
-	assert.Equal(t, 0, offset)
+	assertEqual(t, 10, limit)
+	assertEqual(t, 0, offset)
+}
+
+func TestPaymentPaginationDefaultsInvalidLimit(t *testing.T) {
+	limit, offset := paymentPagination(&dto.PaymentRequestParam{
+		Page:  2,
+		Limit: 0,
+	})
+
+	assertEqual(t, defaultPaymentLimit, limit)
+	assertEqual(t, defaultPaymentLimit, offset)
+}
+
+func assertEqual[T comparable](t *testing.T, expected, actual T) {
+	t.Helper()
+	if actual != expected {
+		t.Fatalf("expected %v, got %v", expected, actual)
+	}
 }

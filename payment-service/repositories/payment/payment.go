@@ -14,7 +14,10 @@ import (
 	"strings"
 )
 
-const defaultPaymentSort = "created_at desc"
+const (
+	defaultPaymentLimit = 10
+	defaultPaymentSort  = "created_at desc"
+)
 
 var allowedPaymentSortColumns = map[string]struct{}{
 	"amount":     {},
@@ -75,14 +78,18 @@ func paymentPagination(param *dto.PaymentRequestParam) (int, int) {
 	if page < 1 {
 		page = 1
 	}
-	return param.Limit, (page - 1) * param.Limit
+	limit := param.Limit
+	if limit < 1 {
+		limit = defaultPaymentLimit
+	}
+	return limit, (page - 1) * limit
 }
 
 func paymentSort(param *dto.PaymentRequestParam) string {
 	if param.SortColumn == nil || param.SortOrder == nil {
 		return defaultPaymentSort
 	}
-	column := *param.SortColumn
+	column := strings.ToLower(*param.SortColumn)
 	if _, ok := allowedPaymentSortColumns[column]; !ok {
 		return defaultPaymentSort
 	}
