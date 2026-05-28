@@ -17,6 +17,7 @@ import (
 	"payment-service/controllers/kafka"
 	"payment-service/domain/dto"
 	"payment-service/domain/models"
+	"payment-service/repositories"
 	paymentRepo "payment-service/repositories/payment"
 	historyRepo "payment-service/repositories/payment_history"
 )
@@ -36,6 +37,10 @@ func (f *fakeRepositoryRegistry) GetPaymentHistory() historyRepo.IPaymentHistory
 
 func (f *fakeRepositoryRegistry) GetTx() *gorm.DB {
 	return nil
+}
+
+func (f *fakeRepositoryRegistry) WithTransaction(_ context.Context, fn func(repositories.IRepositoryRegistry) error) error {
+	return fn(f)
 }
 
 type fakePaymentRepository struct {
@@ -103,6 +108,10 @@ type fakeKafkaRegistry struct {
 
 func (f *fakeKafkaRegistry) GetKafkaProducer() kafka.IKafka {
 	return f.producer
+}
+
+func (f *fakeKafkaRegistry) Close() error {
+	return nil
 }
 
 type fakeKafkaProducer struct {

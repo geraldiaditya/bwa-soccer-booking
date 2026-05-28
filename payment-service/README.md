@@ -30,7 +30,7 @@ Key directories:
 
 ```
 payment-service/
-|-- cmd/                  # Cobra serve command and dependency wiring
+|-- cmd/                  # Cobra serve command entrypoint
 |-- clients/              # Midtrans and internal user-service clients
 |-- common/               # Shared response, utility, PDF, and GCS helpers
 |-- config/               # JSON/Consul config binding and database setup
