@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	cloud.google.com/go/storage v1.51.0
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/IBM/sarama v1.45.1
 	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
 	github.com/didip/tollbooth v4.0.2+incompatible

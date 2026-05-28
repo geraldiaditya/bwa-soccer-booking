@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"gorm.io/gorm"
 	clients "payment-service/clients/midtrans"
 	"payment-service/common/gcs"
 	"payment-service/common/utils"
@@ -112,7 +111,7 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 		midtrans   *clients.MidTransData
 	)
 
-	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
+	err = p.repository.WithTransaction(ctx, func(repository repositories.IRepositoryRegistry) error {
 		if !request.ExpiredAt.After(time.Now()) {
 			return errPayment.ErrExpireAtInvalid
 		}
@@ -127,12 +126,12 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 			ExpiredAt:   request.ExpiredAt,
 			PaymentLink: midtrans.RedirectURL,
 		}
-		payment, txErr = p.repository.GetPayment().Create(ctx, tx, paymentRequest)
+		payment, txErr = repository.GetPayment().Create(ctx, paymentRequest)
 		if txErr != nil {
 			return txErr
 		}
 
-		txErr = p.repository.GetPaymentHistory().Create(ctx, tx, &dto.PaymentHistoryRequest{
+		txErr = repository.GetPaymentHistory().Create(ctx, &dto.PaymentHistoryRequest{
 			PaymentId: payment.ID,
 			Status:    payment.Status.GetStatusString(),
 		})
@@ -212,8 +211,8 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		invoiceLink        string
 	)
 
-	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
-		_, txErr = p.repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
+	err = p.repository.WithTransaction(ctx, func(repository repositories.IRepositoryRegistry) error {
+		_, txErr = repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
 		if txErr != nil {
 			return txErr
 		}
@@ -225,7 +224,7 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		status := webhook.TransactionStatus.GetStatusInt()
 		vaNumber := webhook.VANumbers[0].VANumber
 		bank := webhook.VANumbers[0].Bank
-		_, txErr = p.repository.GetPayment().Update(ctx, tx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
+		_, txErr = repository.GetPayment().Update(ctx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
 			TransactionId: &webhook.TransactionId,
 			Status:        &status,
 			PaidAt:        paidAt,
@@ -236,11 +235,11 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		if txErr != nil {
 			return txErr
 		}
-		paymentAfterUpdate, txErr = p.repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
+		paymentAfterUpdate, txErr = repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
 		if txErr != nil {
 			return txErr
 		}
-		txErr = p.repository.GetPaymentHistory().Create(ctx, tx, &dto.PaymentHistoryRequest{
+		txErr = repository.GetPaymentHistory().Create(ctx, &dto.PaymentHistoryRequest{
 			PaymentId: paymentAfterUpdate.ID,
 			Status:    paymentAfterUpdate.Status.GetStatusString(),
 		})
@@ -252,7 +251,7 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 			if txErr != nil {
 				return txErr
 			}
-			_, txErr = p.repository.GetPayment().Update(ctx, tx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
+			_, txErr = repository.GetPayment().Update(ctx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
 				InvoiceLink: &invoiceLink,
 			})
 			if txErr != nil {
