@@ -2,15 +2,31 @@ package kafka
 
 type IKafkaRegistry interface {
 	GetKafkaProducer() IKafka
+	Close() error
 }
 type Registry struct {
-	brokers []string
+	producer IKafka
 }
 
 func (r Registry) GetKafkaProducer() IKafka {
-	return NewKafkaProducer(r.brokers)
+	return r.producer
 }
 
-func NewKafkaRegistry(brokers []string) IKafkaRegistry {
-	return &Registry{brokers: brokers}
+func (r Registry) Close() error {
+	if r.producer == nil {
+		return nil
+	}
+	return r.producer.Close()
+}
+
+func NewKafkaRegistry(brokers []string, maxRetry int) (IKafkaRegistry, error) {
+	producer, err := NewKafkaProducer(brokers, maxRetry)
+	if err != nil {
+		return nil, err
+	}
+	return NewKafkaRegistryWithProducer(producer), nil
+}
+
+func NewKafkaRegistryWithProducer(producer IKafka) IKafkaRegistry {
+	return &Registry{producer: producer}
 }

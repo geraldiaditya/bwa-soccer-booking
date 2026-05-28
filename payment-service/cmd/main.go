@@ -24,6 +24,7 @@ import (
 	"github.com/didip/tollbooth/limiter"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +54,15 @@ var command = &cobra.Command{
 		}
 
 		gcs := initGCS()
-		kafka := kafkaClient.NewKafkaRegistry(config.Config.Kafka.Brokers)
+		kafka, err := kafkaClient.NewKafkaRegistry(config.Config.Kafka.Brokers, config.Config.Kafka.MaxRetry)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			if closeErr := kafka.Close(); closeErr != nil {
+				logrus.Errorf("failed to close kafka producer: %v", closeErr)
+			}
+		}()
 		midtrans := midtransClient.NewMidTransClient(
 			config.Config.Midtrans.ServerKey,
 			config.Config.Midtrans.IsProduction)
