@@ -11,6 +11,7 @@ import (
 type IRepositoryRegistry interface {
 	GetPayment() repositories.IPaymentRepository
 	GetPaymentHistory() repositories2.IPaymentHistoryRepository
+	// Deprecated: use WithTransaction for transactional repository work.
 	GetTx() *gorm.DB
 	WithTransaction(context.Context, func(IRepositoryRegistry) error) error
 }
