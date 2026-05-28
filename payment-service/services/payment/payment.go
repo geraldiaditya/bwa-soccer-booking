@@ -44,10 +44,13 @@ func NewPaymentService(
 }
 
 type PaymentService struct {
-	repository repositories.IRepositoryRegistry
-	gcs        gcs.IGSClient
-	kafka      kafka.IKafkaRegistry
-	midtrans   clients.IMidTransClient
+	repository       repositories.IRepositoryRegistry
+	gcs              gcs.IGSClient
+	kafka            kafka.IKafkaRegistry
+	midtrans         clients.IMidTransClient
+	generatePDFFunc  func(*dto.InvoiceRequest) ([]byte, error)
+	uploadToGCSFunc  func(context.Context, string, []byte) (string, error)
+	randomNumberFunc func() int
 }
 
 func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) (*utils.PaginationResult, error) {
@@ -116,7 +119,7 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 		midtrans   *clients.MidTransData
 	)
 
-	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
+	err = p.inTransaction(func(tx *gorm.DB) error {
 		if !request.ExpiredAt.After(time.Now()) {
 			return errPayment.ErrExpireAtInvalid
 		}
@@ -219,6 +222,35 @@ func (p *PaymentService) randomNumber() int {
 	return number
 }
 
+func (p *PaymentService) renderInvoicePDF(req *dto.InvoiceRequest) ([]byte, error) {
+	if p.generatePDFFunc != nil {
+		return p.generatePDFFunc(req)
+	}
+	return p.generatePDF(req)
+}
+
+func (p *PaymentService) storeInvoicePDF(ctx context.Context, invoiceNumber string, pdf []byte) (string, error) {
+	if p.uploadToGCSFunc != nil {
+		return p.uploadToGCSFunc(ctx, invoiceNumber, pdf)
+	}
+	return p.uploadToGCS(ctx, invoiceNumber, pdf)
+}
+
+func (p *PaymentService) nextRandomNumber() int {
+	if p.randomNumberFunc != nil {
+		return p.randomNumberFunc()
+	}
+	return p.randomNumber()
+}
+
+func (p *PaymentService) inTransaction(fn func(*gorm.DB) error) error {
+	tx := p.repository.GetTx()
+	if tx == nil {
+		return fn(nil)
+	}
+	return tx.Transaction(fn)
+}
+
 func (p *PaymentService) mapTransactionStatusToEvent(status constants.PaymentStatusString) string {
 	var paymentStatus string
 	switch status {
@@ -276,7 +308,7 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		pdf                []byte
 	)
 
-	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
+	err = p.inTransaction(func(tx *gorm.DB) error {
 		_, txErr = p.repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
 		if txErr != nil {
 			return txErr
@@ -313,7 +345,7 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 			paidDay := paidAt.Format("02")
 			paidMonth := paidAt.Format("January")
 			paidYear := paidAt.Format("2006")
-			invoiceNumber := fmt.Sprintf("INV/%s/ORD/%d", time.Now().Format(time.DateOnly), p.randomNumber())
+			invoiceNumber := fmt.Sprintf("INV/%s/ORD/%d", time.Now().Format(time.DateOnly), p.nextRandomNumber())
 			total := utils.RupiahFormat(&paymentAfterUpdate.Amount)
 			invoiceRequest := &dto.InvoiceRequest{
 				InvoiceNumber: invoiceNumber,
@@ -334,11 +366,11 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 					Total: total,
 				},
 			}
-			pdf, txErr = p.generatePDF(invoiceRequest)
+			pdf, txErr = p.renderInvoicePDF(invoiceRequest)
 			if txErr != nil {
 				return txErr
 			}
-			invoiceLink, txErr = p.uploadToGCS(ctx, invoiceNumber, pdf)
+			invoiceLink, txErr = p.storeInvoicePDF(ctx, invoiceNumber, pdf)
 			if txErr != nil {
 				return txErr
 			}
