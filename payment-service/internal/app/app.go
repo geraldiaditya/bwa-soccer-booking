@@ -32,16 +32,12 @@ import (
 
 const shutdownTimeout = 10 * time.Second
 
-type Dependencies struct {
+type dependencies struct {
 	Controller controllers.IControllerRegistry
 	Client     clients.IClientRegistry
 }
 
 func Run(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	_ = godotenv.Load()
 	config.Init()
 
@@ -77,7 +73,7 @@ func Run(ctx context.Context) error {
 	service := services.NewServiceRegistry(repository, gcsClient, kafka, midtrans)
 	controller := controllers.NewControllerRegistry(service)
 
-	router := NewRouter(config.Config, Dependencies{
+	router := newRouter(config.Config, dependencies{
 		Controller: controller,
 		Client:     client,
 	})
@@ -93,7 +89,7 @@ func Run(ctx context.Context) error {
 	return serve(ctx, server)
 }
 
-func NewRouter(appConfig config.AppConfig, deps Dependencies) *gin.Engine {
+func newRouter(appConfig config.AppConfig, deps dependencies) *gin.Engine {
 	router := gin.Default()
 	router.Use(middlewares.HandlePanic())
 

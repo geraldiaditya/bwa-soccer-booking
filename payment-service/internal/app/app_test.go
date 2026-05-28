@@ -41,10 +41,10 @@ func (fakeUserClient) GetUserByToken(context.Context) (*userClient.UserData, err
 
 func TestNewRouterRootRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router := NewRouter(config.AppConfig{
+	router := newRouter(config.AppConfig{
 		RateLimiterMaxRequest: 10,
 		RateLimiterTimeSecond: 1,
-	}, Dependencies{
+	}, dependencies{
 		Controller: fakeControllerRegistry{},
 		Client:     fakeClientRegistry{},
 	})
@@ -75,10 +75,10 @@ func TestNewRouterRootRoute(t *testing.T) {
 
 func TestNewRouterNoRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router := NewRouter(config.AppConfig{
+	router := newRouter(config.AppConfig{
 		RateLimiterMaxRequest: 10,
 		RateLimiterTimeSecond: 1,
-	}, Dependencies{
+	}, dependencies{
 		Controller: fakeControllerRegistry{},
 		Client:     fakeClientRegistry{},
 	})
