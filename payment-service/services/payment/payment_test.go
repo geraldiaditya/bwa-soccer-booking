@@ -44,9 +44,9 @@ func (f *fakeRepositoryRegistry) WithTransaction(_ context.Context, fn func(repo
 }
 
 type fakePaymentRepository struct {
-	createFn        func(context.Context, *gorm.DB, *dto.PaymentRequest) (*models.Payment, error)
+	createFn        func(context.Context, *dto.PaymentRequest) (*models.Payment, error)
 	findByOrderIDFn func(context.Context, string) (*models.Payment, error)
-	updateFn        func(context.Context, *gorm.DB, string, *dto.UpdatePaymentRequest) (*models.Payment, error)
+	updateFn        func(context.Context, string, *dto.UpdatePaymentRequest) (*models.Payment, error)
 
 	createCalls int
 	updateCalls int
@@ -64,24 +64,24 @@ func (f *fakePaymentRepository) FindByOrderID(ctx context.Context, orderID strin
 	return f.findByOrderIDFn(ctx, orderID)
 }
 
-func (f *fakePaymentRepository) Create(ctx context.Context, tx *gorm.DB, request *dto.PaymentRequest) (*models.Payment, error) {
+func (f *fakePaymentRepository) Create(ctx context.Context, request *dto.PaymentRequest) (*models.Payment, error) {
 	f.createCalls++
-	return f.createFn(ctx, tx, request)
+	return f.createFn(ctx, request)
 }
 
-func (f *fakePaymentRepository) Update(ctx context.Context, tx *gorm.DB, orderID string, request *dto.UpdatePaymentRequest) (*models.Payment, error) {
+func (f *fakePaymentRepository) Update(ctx context.Context, orderID string, request *dto.UpdatePaymentRequest) (*models.Payment, error) {
 	f.updateCalls++
-	return f.updateFn(ctx, tx, orderID, request)
+	return f.updateFn(ctx, orderID, request)
 }
 
 type fakePaymentHistoryRepository struct {
-	createFn    func(context.Context, *gorm.DB, *dto.PaymentHistoryRequest) error
+	createFn    func(context.Context, *dto.PaymentHistoryRequest) error
 	createCalls int
 }
 
-func (f *fakePaymentHistoryRepository) Create(ctx context.Context, tx *gorm.DB, request *dto.PaymentHistoryRequest) error {
+func (f *fakePaymentHistoryRepository) Create(ctx context.Context, request *dto.PaymentHistoryRequest) error {
 	f.createCalls++
-	return f.createFn(ctx, tx, request)
+	return f.createFn(ctx, request)
 }
 
 type fakeMidtransClient struct {
@@ -94,13 +94,30 @@ func (f *fakeMidtransClient) CreatePaymentLink(request *dto.PaymentRequest) (*mi
 	return f.createFn(request)
 }
 
-type fakeGCSClient struct{}
+type fakeUnexpectedGCSClient struct{}
 
-func (f fakeGCSClient) UploadFile(context.Context, string, []byte) (string, error) {
+func (f fakeUnexpectedGCSClient) UploadFile(context.Context, string, []byte) (string, error) {
 	return "", errors.New("unexpected gcs call")
 }
 
-var _ gcs.IGSClient = fakeGCSClient{}
+var _ gcs.IGSClient = fakeUnexpectedGCSClient{}
+
+type fakePaymentServiceGCSClient struct {
+	err      error
+	calls    int
+	filename string
+	data     []byte
+}
+
+func (f *fakePaymentServiceGCSClient) UploadFile(_ context.Context, filename string, data []byte) (string, error) {
+	f.calls++
+	f.filename = filename
+	f.data = data
+	if f.err != nil {
+		return "", f.err
+	}
+	return "https://storage.example/invoice.pdf", nil
+}
 
 type fakeKafkaRegistry struct {
 	producer *fakeKafkaProducer
@@ -189,7 +206,7 @@ func TestPaymentServiceCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			paymentRepository := &fakePaymentRepository{}
-			paymentRepository.createFn = func(_ context.Context, _ *gorm.DB, request *dto.PaymentRequest) (*models.Payment, error) {
+			paymentRepository.createFn = func(_ context.Context, request *dto.PaymentRequest) (*models.Payment, error) {
 				if request.PaymentLink != "https://pay.example/redirect" {
 					t.Fatalf("expected midtrans redirect URL to be persisted, got %q", request.PaymentLink)
 				}
@@ -207,7 +224,7 @@ func TestPaymentServiceCreate(t *testing.T) {
 				}, nil
 			}
 			historyRepository := &fakePaymentHistoryRepository{
-				createFn: func(_ context.Context, _ *gorm.DB, request *dto.PaymentHistoryRequest) error {
+				createFn: func(_ context.Context, request *dto.PaymentHistoryRequest) error {
 					if request.PaymentId != 7 || request.Status != constants.InitialString {
 						t.Fatalf("unexpected history request: %+v", request)
 					}
@@ -225,7 +242,7 @@ func TestPaymentServiceCreate(t *testing.T) {
 
 			service := NewPaymentService(
 				&fakeRepositoryRegistry{payment: paymentRepository, history: historyRepository},
-				fakeGCSClient{},
+				fakeUnexpectedGCSClient{},
 				&fakeKafkaRegistry{producer: &fakeKafkaProducer{}},
 				midtransClient,
 			)
@@ -374,7 +391,7 @@ func TestPaymentServiceWebhook(t *testing.T) {
 				}
 				return currentPayment, nil
 			}
-			paymentRepository.updateFn = func(_ context.Context, _ *gorm.DB, id string, request *dto.UpdatePaymentRequest) (*models.Payment, error) {
+			paymentRepository.updateFn = func(_ context.Context, id string, request *dto.UpdatePaymentRequest) (*models.Payment, error) {
 				if id != orderID.String() {
 					t.Fatalf("unexpected order ID update %q", id)
 				}
@@ -400,7 +417,7 @@ func TestPaymentServiceWebhook(t *testing.T) {
 				return currentPayment, nil
 			}
 			historyRepository := &fakePaymentHistoryRepository{
-				createFn: func(_ context.Context, _ *gorm.DB, request *dto.PaymentHistoryRequest) error {
+				createFn: func(_ context.Context, request *dto.PaymentHistoryRequest) error {
 					if request.PaymentId != currentPayment.ID {
 						t.Fatalf("unexpected history payment ID %d", request.PaymentId)
 					}
@@ -408,15 +425,15 @@ func TestPaymentServiceWebhook(t *testing.T) {
 				},
 			}
 			producer := &fakeKafkaProducer{err: tt.kafkaErr}
+			gcsClient := &fakePaymentServiceGCSClient{err: tt.uploadErr}
 			service := NewPaymentService(
 				&fakeRepositoryRegistry{payment: paymentRepository, history: historyRepository},
-				fakeGCSClient{},
+				gcsClient,
 				&fakeKafkaRegistry{producer: producer},
 				&fakeMidtransClient{},
 			).(*PaymentService)
 			invoiceCalls := 0
-			uploadCalls := 0
-			service.generatePDFFunc = func(request *dto.InvoiceRequest) ([]byte, error) {
+			service.invoiceGenerator.renderPDF = func(request *dto.InvoiceRequest) ([]byte, error) {
 				invoiceCalls++
 				if request.Data.PaymentDetail.BankName != "BCA" || request.Data.PaymentDetail.VANumber != "123456" {
 					t.Fatalf("unexpected invoice request: %+v", request)
@@ -426,17 +443,6 @@ func TestPaymentServiceWebhook(t *testing.T) {
 				}
 				return []byte("pdf"), nil
 			}
-			service.uploadToGCSFunc = func(_ context.Context, invoiceNumber string, pdf []byte) (string, error) {
-				uploadCalls++
-				if invoiceNumber == "" || string(pdf) != "pdf" {
-					t.Fatalf("unexpected upload args invoice=%q pdf=%q", invoiceNumber, string(pdf))
-				}
-				if tt.uploadErr != nil {
-					return "", tt.uploadErr
-				}
-				return "https://storage.example/invoice.pdf", nil
-			}
-			service.randomNumberFunc = func() int { return 123456 }
 
 			err := service.Webhook(context.Background(), &dto.Webhook{
 				OrderId:           orderID,
@@ -462,8 +468,11 @@ func TestPaymentServiceWebhook(t *testing.T) {
 			if invoiceCalls != tt.wantInvoiceCalls {
 				t.Fatalf("expected %d invoice calls, got %d", tt.wantInvoiceCalls, invoiceCalls)
 			}
-			if uploadCalls != tt.wantUploadCalls {
-				t.Fatalf("expected %d upload calls, got %d", tt.wantUploadCalls, uploadCalls)
+			if gcsClient.calls != tt.wantUploadCalls {
+				t.Fatalf("expected %d upload calls, got %d", tt.wantUploadCalls, gcsClient.calls)
+			}
+			if tt.wantUploadCalls > 0 && (gcsClient.filename == "" || string(gcsClient.data) != "pdf") {
+				t.Fatalf("unexpected upload args filename=%q pdf=%q", gcsClient.filename, string(gcsClient.data))
 			}
 			if producer.calls != tt.wantKafkaCalls {
 				t.Fatalf("expected %d kafka calls, got %d", tt.wantKafkaCalls, producer.calls)
