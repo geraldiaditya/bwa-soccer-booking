@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -27,6 +26,10 @@ type fakeKafkaRegistry struct {
 
 func (f *fakeKafkaRegistry) GetKafkaProducer() kafka.IKafka {
 	return f.producer
+}
+
+func (f *fakeKafkaRegistry) Close() error {
+	return nil
 }
 
 type fakeKafkaProducer struct {
@@ -219,30 +222,23 @@ func TestWebhookHandlesPendingWithoutVANumbers(t *testing.T) {
 
 func TestWebhookHandlesSettlementWithVANumber(t *testing.T) {
 	service, db, producer := newTestPaymentService(t)
-	workingDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get working dir: %v", err)
-	}
-	if err = os.Chdir("../.."); err != nil {
-		t.Fatalf("change working dir: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chdir(workingDir); err != nil {
-			t.Fatalf("restore working dir: %v", err)
-		}
-	})
 	originalGeneratePDF := generatePDFFromHTML
+	originalReadFile := readFile
+	readFile = func(string) ([]byte, error) {
+		return []byte("<html></html>"), nil
+	}
 	generatePDFFromHTML = func(string, any) ([]byte, error) {
 		return []byte("pdf"), nil
 	}
 	t.Cleanup(func() {
+		readFile = originalReadFile
 		generatePDFFromHTML = originalGeneratePDF
 	})
 	payment := createPayment(t, db, constants.Pending)
 	webhook := signedWebhook(service, payment, constants.SettlementString)
 	webhook.VANumbers = []dto.VANumber{{Bank: "bca", VANumber: "1234567890"}}
 
-	err = service.Webhook(context.Background(), webhook)
+	err := service.Webhook(context.Background(), webhook)
 
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -345,6 +341,53 @@ func TestWebhookRejectsInvalidTransition(t *testing.T) {
 	if len(producer.messages) != 0 {
 		t.Fatalf("expected no kafka messages, got %d", len(producer.messages))
 	}
+}
+
+func TestValidateStatusTransition(t *testing.T) {
+	service, _, _ := newTestPaymentService(t)
+	tests := []struct {
+		name        string
+		current     *constants.PaymentStatus
+		next        constants.PaymentStatus
+		expectedErr error
+	}{
+		{name: "initial to pending", current: statusPtr(constants.Initial), next: constants.Pending},
+		{name: "initial to settlement", current: statusPtr(constants.Initial), next: constants.Settlement},
+		{name: "initial to expire", current: statusPtr(constants.Initial), next: constants.Expire},
+		{name: "pending to settlement", current: statusPtr(constants.Pending), next: constants.Settlement},
+		{name: "pending to expire", current: statusPtr(constants.Pending), next: constants.Expire},
+		{name: "duplicate pending", current: statusPtr(constants.Pending), next: constants.Pending},
+		{name: "settlement to pending", current: statusPtr(constants.Settlement), next: constants.Pending, expectedErr: errPayment.ErrWebhookInvalidTransition},
+		{name: "expire to pending", current: statusPtr(constants.Expire), next: constants.Pending, expectedErr: errPayment.ErrWebhookInvalidTransition},
+		{name: "pending to initial", current: statusPtr(constants.Pending), next: constants.Initial, expectedErr: errPayment.ErrWebhookInvalidTransition},
+		{name: "nil status", current: nil, next: constants.Pending, expectedErr: errPayment.ErrWebhookInvalidPayload},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payment := &models.Payment{Status: tt.current}
+
+			err := service.validateStatusTransition(payment, tt.next)
+
+			if !errors.Is(err, tt.expectedErr) {
+				t.Fatalf("expected error %v, got %v", tt.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateStatusTransitionRejectsNilPayment(t *testing.T) {
+	service, _, _ := newTestPaymentService(t)
+
+	err := service.validateStatusTransition(nil, constants.Pending)
+
+	if !errors.Is(err, errPayment.ErrWebhookInvalidPayload) {
+		t.Fatalf("expected invalid payload error, got %v", err)
+	}
+}
+
+func statusPtr(status constants.PaymentStatus) *constants.PaymentStatus {
+	return &status
 }
 
 var (

@@ -54,6 +54,7 @@ type PaymentService struct {
 }
 
 var generatePDFFromHTML = utils.GeneratePDFFromHTML
+var readFile = os.ReadFile
 
 func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) (*utils.PaginationResult, error) {
 	payments, total, err := p.repository.GetPayment().FindAllWithPagination(ctx, param)
@@ -191,7 +192,7 @@ func (p *PaymentService) convertToIndonesiaMonth(englishMonth string) string {
 
 func (p *PaymentService) generatePDF(req *dto.InvoiceRequest) ([]byte, error) {
 	htmlTemplatePath := "templates/invoice.html"
-	htmlTemplate, err := os.ReadFile(htmlTemplatePath)
+	htmlTemplate, err := readFile(htmlTemplatePath)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +439,8 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 			return txErr
 		}
 		updated = true
-		paymentAfterUpdate = paymentBeforeUpdate
+		afterUpdate := *paymentBeforeUpdate
+		paymentAfterUpdate = &afterUpdate
 		paymentAfterUpdate.TransactionID = &webhook.TransactionId
 		paymentAfterUpdate.Status = &status
 		paymentAfterUpdate.PaidAt = paidAt
