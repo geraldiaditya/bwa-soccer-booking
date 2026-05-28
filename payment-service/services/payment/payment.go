@@ -3,11 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"gorm.io/gorm"
-	"math/rand"
-	"os"
 	clients "payment-service/clients/midtrans"
 	"payment-service/common/gcs"
 	"payment-service/common/utils"
@@ -36,18 +32,18 @@ func NewPaymentService(
 	midtrans clients.IMidTransClient,
 ) IPaymentService {
 	return &PaymentService{
-		repository: repository,
-		gcs:        gcs,
-		kafka:      kafka,
-		midtrans:   midtrans,
+		repository:       repository,
+		kafka:            kafka,
+		midtrans:         midtrans,
+		invoiceGenerator: NewInvoiceGenerator(gcs),
 	}
 }
 
 type PaymentService struct {
-	repository repositories.IRepositoryRegistry
-	gcs        gcs.IGSClient
-	kafka      kafka.IKafkaRegistry
-	midtrans   clients.IMidTransClient
+	repository       repositories.IRepositoryRegistry
+	kafka            kafka.IKafkaRegistry
+	midtrans         clients.IMidTransClient
+	invoiceGenerator *InvoiceGenerator
 }
 
 func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) (*utils.PaginationResult, error) {
@@ -160,65 +156,6 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 	return response, nil
 }
 
-func (p *PaymentService) convertToIndonesiaMonth(englishMonth string) string {
-	monthMap := map[string]string{
-		"January":  "Januari",
-		"February": "Februari",
-		"March":    "Maret",
-		"April":    "April",
-
-		"May":       "May",
-		"June":      "Juni",
-		"July":      "Juli",
-		"August":    "Agustus",
-		"September": "September",
-		"October":   "OKtober",
-		"November":  "November",
-		"December":  "Desember",
-	}
-
-	indonesiaMonth, ok := monthMap[englishMonth]
-	if !ok {
-		return errors.New("month not found").Error()
-	}
-	return indonesiaMonth
-}
-
-func (p *PaymentService) generatePDF(req *dto.InvoiceRequest) ([]byte, error) {
-	htmlTemplatePath := "templates/invoice.html"
-	htmlTemplate, err := os.ReadFile(htmlTemplatePath)
-	if err != nil {
-		return nil, err
-	}
-	var data map[string]interface{}
-	jsonData, _ := json.Marshal(req)
-	err = json.Unmarshal(jsonData, &data)
-	if err != nil {
-		return nil, err
-	}
-	pdf, err := utils.GeneratePDFFromHTML(string(htmlTemplate), data)
-	if err != nil {
-		return nil, err
-	}
-	return pdf, nil
-}
-
-func (p *PaymentService) uploadToGCS(ctx context.Context, invoiceNumber string, pdf []byte) (string, error) {
-	invoiceNumberReplace := strings.ToLower(strings.ReplaceAll(invoiceNumber, "/", "-"))
-	filename := fmt.Sprintf("%s.pdf", invoiceNumberReplace)
-	url, err := p.gcs.UploadFile(ctx, filename, pdf)
-	if err != nil {
-		return "", err
-	}
-	return url, nil
-}
-
-func (p *PaymentService) randomNumber() int {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	number := random.Intn(900000) + 100000
-	return number
-}
-
 func (p *PaymentService) mapTransactionStatusToEvent(status constants.PaymentStatusString) string {
 	var paymentStatus string
 	switch status {
@@ -273,7 +210,6 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		paymentAfterUpdate *models.Payment
 		paidAt             *time.Time
 		invoiceLink        string
-		pdf                []byte
 	)
 
 	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
@@ -310,35 +246,9 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		})
 
 		if webhook.TransactionStatus == constants.SettlementString {
-			paidDay := paidAt.Format("02")
-			paidMonth := paidAt.Format("January")
-			paidYear := paidAt.Format("2006")
-			invoiceNumber := fmt.Sprintf("INV/%s/ORD/%d", time.Now().Format(time.DateOnly), p.randomNumber())
-			total := utils.RupiahFormat(&paymentAfterUpdate.Amount)
-			invoiceRequest := &dto.InvoiceRequest{
-				InvoiceNumber: invoiceNumber,
-				Data: dto.InvoiceData{
-					PaymentDetail: dto.InvoicePaymentDetail{
-						BankName:      strings.ToUpper(*paymentAfterUpdate.Bank),
-						PaymentMethod: webhook.PaymentType,
-						VANumber:      *paymentAfterUpdate.VANumber,
-						Date:          fmt.Sprintf("%s %s %s", paidDay, paidMonth, paidYear),
-						IsPaid:        true,
-					},
-					Items: []dto.InvoiceItem{
-						{
-							Description: *paymentAfterUpdate.Description,
-							Price:       total,
-						},
-					},
-					Total: total,
-				},
-			}
-			pdf, txErr = p.generatePDF(invoiceRequest)
-			if txErr != nil {
-				return txErr
-			}
-			invoiceLink, txErr = p.uploadToGCS(ctx, invoiceNumber, pdf)
+			invoiceNumber := BuildInvoiceNumber(time.Now(), paymentAfterUpdate.OrderID, paymentAfterUpdate.UUID)
+			invoiceRequest := BuildInvoiceRequest(paymentAfterUpdate, webhook, *paidAt, invoiceNumber)
+			invoiceLink, txErr = p.invoiceGenerator.GenerateAndUpload(ctx, invoiceRequest)
 			if txErr != nil {
 				return txErr
 			}
