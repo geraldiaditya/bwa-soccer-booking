@@ -33,8 +33,8 @@ type IPaymentRepository interface {
 	FindAllWithPagination(context.Context, *dto.PaymentRequestParam) ([]models.Payment, int64, error)
 	FindByUUID(context.Context, string) (*models.Payment, error)
 	FindByOrderID(context.Context, string) (*models.Payment, error)
-	Create(context.Context, *gorm.DB, *dto.PaymentRequest) (*models.Payment, error)
-	Update(context.Context, *gorm.DB, string, *dto.UpdatePaymentRequest) (*models.Payment, error)
+	Create(context.Context, *dto.PaymentRequest) (*models.Payment, error)
+	Update(context.Context, string, *dto.UpdatePaymentRequest) (*models.Payment, error)
 }
 
 func NewPaymentRepository(db *gorm.DB) IPaymentRepository {
@@ -130,7 +130,7 @@ func (p *PaymentRepository) FindByOrderID(ctx context.Context, orderId string) (
 	return &payment, nil
 }
 
-func (p *PaymentRepository) Create(ctx context.Context, tx *gorm.DB, request *dto.PaymentRequest) (*models.Payment, error) {
+func (p *PaymentRepository) Create(ctx context.Context, request *dto.PaymentRequest) (*models.Payment, error) {
 	status := constants.Initial
 	orderId := uuid.MustParse(request.OrderID)
 	payment := models.Payment{
@@ -142,14 +142,14 @@ func (p *PaymentRepository) Create(ctx context.Context, tx *gorm.DB, request *dt
 		Description: request.Description,
 		Status:      &status,
 	}
-	err := tx.WithContext(ctx).Create(&payment).Error
+	err := p.db.WithContext(ctx).Create(&payment).Error
 	if err != nil {
 		return nil, errWrap.WrapError(errConstant.ErrSQLError)
 	}
 	return &payment, nil
 }
 
-func (p *PaymentRepository) Update(ctx context.Context, tx *gorm.DB, orderId string, request *dto.UpdatePaymentRequest) (*models.Payment, error) {
+func (p *PaymentRepository) Update(ctx context.Context, orderId string, request *dto.UpdatePaymentRequest) (*models.Payment, error) {
 	payment := models.Payment{
 		Status:        request.Status,
 		TransactionID: request.TransactionId,
@@ -159,7 +159,7 @@ func (p *PaymentRepository) Update(ctx context.Context, tx *gorm.DB, orderId str
 		Bank:          request.Bank,
 		Acquirer:      &request.Acquirer,
 	}
-	err := tx.WithContext(ctx).Where("order_id = ?", orderId).Updates(&payment).Error
+	err := p.db.WithContext(ctx).Where("order_id = ?", orderId).Updates(&payment).Error
 	if err != nil {
 		return nil, errWrap.WrapError(errConstant.ErrSQLError)
 	}
