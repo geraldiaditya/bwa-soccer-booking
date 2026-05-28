@@ -9,9 +9,11 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type requestBinder func(interface{}) error
+type requestBinder func(any) error
 
-func bindRequest(ctx *gin.Context, request interface{}, binder requestBinder) bool {
+var requestValidator = validator.New()
+
+func bindRequest(ctx *gin.Context, request any, binder requestBinder) bool {
 	if err := binder(request); err != nil {
 		response.HttpResponse(response.ParamHTTPResp{
 			Code: http.StatusBadRequest,
@@ -23,11 +25,11 @@ func bindRequest(ctx *gin.Context, request interface{}, binder requestBinder) bo
 	return true
 }
 
-func bindAndValidateRequest(ctx *gin.Context, request interface{}, binder requestBinder) bool {
+func bindAndValidateRequest(ctx *gin.Context, request any, binder requestBinder) bool {
 	if !bindRequest(ctx, request, binder) {
 		return false
 	}
-	if err := validator.New().Struct(request); err != nil {
+	if err := requestValidator.Struct(request); err != nil {
 		errMessage := http.StatusText(http.StatusUnprocessableEntity)
 		errResponse := errValidation.ErrValidationResponse(err)
 		response.HttpResponse(response.ParamHTTPResp{

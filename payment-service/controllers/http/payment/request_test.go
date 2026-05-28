@@ -19,7 +19,7 @@ type testRequest struct {
 func TestBindAndValidateRequestReturnsFalseAndBadRequestOnBindError(t *testing.T) {
 	ctx, recorder := newTestContext()
 
-	ok := bindAndValidateRequest(ctx, &testRequest{}, func(interface{}) error {
+	ok := bindAndValidateRequest(ctx, &testRequest{}, func(any) error {
 		return errors.New("invalid request")
 	})
 
@@ -39,7 +39,7 @@ func TestBindAndValidateRequestReturnsFalseAndBadRequestOnBindError(t *testing.T
 func TestBindAndValidateRequestReturnsFalseAndValidationResponse(t *testing.T) {
 	ctx, recorder := newTestContext()
 
-	ok := bindAndValidateRequest(ctx, &testRequest{}, func(interface{}) error {
+	ok := bindAndValidateRequest(ctx, &testRequest{}, func(any) error {
 		return nil
 	})
 
@@ -57,7 +57,7 @@ func TestBindAndValidateRequestReturnsFalseAndValidationResponse(t *testing.T) {
 	if body.Message != http.StatusText(http.StatusUnprocessableEntity) {
 		t.Fatalf("expected message %q, got %q", http.StatusText(http.StatusUnprocessableEntity), body.Message)
 	}
-	data, ok := body.Data.([]interface{})
+	data, ok := body.Data.([]any)
 	if !ok || len(data) != 1 {
 		t.Fatalf("expected one validation error, got %#v", body.Data)
 	}
@@ -67,7 +67,7 @@ func TestBindAndValidateRequestReturnsTrueOnValidRequest(t *testing.T) {
 	ctx, _ := newTestContext()
 	request := testRequest{Name: "valid"}
 
-	ok := bindAndValidateRequest(ctx, &request, func(interface{}) error {
+	ok := bindAndValidateRequest(ctx, &request, func(any) error {
 		return nil
 	})
 
@@ -79,7 +79,7 @@ func TestBindAndValidateRequestReturnsTrueOnValidRequest(t *testing.T) {
 func TestBindRequestSkipsValidation(t *testing.T) {
 	ctx, _ := newTestContext()
 
-	ok := bindRequest(ctx, &testRequest{}, func(interface{}) error {
+	ok := bindRequest(ctx, &testRequest{}, func(any) error {
 		return nil
 	})
 
@@ -95,7 +95,7 @@ func newTestContext() (*gin.Context, *httptest.ResponseRecorder) {
 	return ctx, recorder
 }
 
-func decodeResponse(t *testing.T, recorder *httptest.ResponseRecorder, target interface{}) {
+func decodeResponse(t *testing.T, recorder *httptest.ResponseRecorder, target any) {
 	t.Helper()
 	if err := json.Unmarshal(recorder.Body.Bytes(), target); err != nil {
 		t.Fatalf("failed to decode response: %v", err)

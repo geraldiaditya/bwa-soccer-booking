@@ -72,7 +72,7 @@ func (p *PaymentService) GetByUUID(ctx context.Context, s string) (*dto.PaymentR
 	if err != nil {
 		return nil, err
 	}
-	response := mapPaymentResponse(*payment)
+	response := mapPaymentResponse(payment)
 	return &response, nil
 }
 
@@ -117,7 +117,7 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 		return nil, err
 	}
 
-	mappedResponse := mapPaymentResponse(*payment)
+	mappedResponse := mapCreatedPaymentResponse(payment)
 	response = &mappedResponse
 	return response, nil
 }
@@ -152,7 +152,7 @@ func (p *PaymentService) generatePDF(req *dto.InvoiceRequest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var data map[string]interface{}
+	var data map[string]any
 	jsonData, _ := json.Marshal(req)
 	err = json.Unmarshal(jsonData, &data)
 	if err != nil {

@@ -25,7 +25,7 @@ func TestMapPaymentResponseMapsAllFields(t *testing.T) {
 	paymentUUID := uuid.New()
 	orderID := uuid.New()
 
-	result := mapPaymentResponse(models.Payment{
+	result := mapPaymentResponse(&models.Payment{
 		ID:            10,
 		UUID:          paymentUUID,
 		OrderID:       orderID,
@@ -73,7 +73,7 @@ func TestMapPaymentResponseMapsAllFields(t *testing.T) {
 func TestMapPaymentResponseKeepsNilOptionalFields(t *testing.T) {
 	status := constants.Pending
 
-	result := mapPaymentResponse(models.Payment{
+	result := mapPaymentResponse(&models.Payment{
 		Status: &status,
 	})
 
@@ -123,6 +123,40 @@ func TestMapPaymentResponsesMapsSlice(t *testing.T) {
 	}
 	if result[1].Status != constants.SettlementString || result[1].Amount != 2 {
 		t.Fatalf("expected second payment to be mapped")
+	}
+}
+
+func TestMapCreatedPaymentResponseKeepsOriginalCreateShape(t *testing.T) {
+	status := constants.Pending
+	description := "booking payment"
+	transactionID := "transaction-123"
+	createdAt := time.Date(2026, 5, 27, 1, 2, 3, 0, time.UTC)
+	paymentUUID := uuid.New()
+	orderID := uuid.New()
+
+	result := mapCreatedPaymentResponse(&models.Payment{
+		UUID:          paymentUUID,
+		OrderID:       orderID,
+		Amount:        150000,
+		Status:        &status,
+		PaymentLink:   "https://example.com/pay",
+		TransactionID: &transactionID,
+		Description:   &description,
+		CreatedAt:     &createdAt,
+	})
+
+	if result.UUID != paymentUUID || result.OrderID != orderID || result.Amount != 150000 {
+		t.Fatalf("expected core payment fields to be mapped, got %#v", result)
+	}
+	if result.Status != constants.PendingString {
+		t.Fatalf("expected status %s, got %s", constants.PendingString, result.Status)
+	}
+	if result.PaymentLink != "https://example.com/pay" {
+		t.Fatalf("expected payment link to be mapped")
+	}
+	assertStringPtrEqual(t, "description", &description, result.Description)
+	if result.TransactionId != nil || result.CreatedAt != nil {
+		t.Fatalf("expected create-only response to omit expanded fields, got %#v", result)
 	}
 }
 
