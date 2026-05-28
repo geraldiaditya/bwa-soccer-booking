@@ -55,25 +55,7 @@ func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.Pa
 	if err != nil {
 		return nil, err
 	}
-	paymentResults := make([]dto.PaymentResponse, 0, len(payments))
-	for _, payment := range payments {
-		paymentResults = append(paymentResults, dto.PaymentResponse{
-			UUID:          payment.UUID,
-			OrderID:       payment.OrderID,
-			Amount:        payment.Amount,
-			Status:        payment.Status.GetStatusString(),
-			PaymentLink:   payment.PaymentLink,
-			TransactionId: payment.TransactionID,
-			PaidAt:        payment.PaidAt,
-			VANumber:      payment.VANumber,
-			Bank:          payment.Bank,
-			InvoiceLink:   payment.InvoiceLink,
-			Acquirer:      payment.Acquirer,
-			Description:   payment.Description,
-			CreatedAt:     payment.CreatedAt,
-			UpdatedAt:     payment.UpdatedAt,
-		})
-	}
+	paymentResults := mapPaymentResponses(payments)
 
 	paginationParam := utils.PaginationParam{
 		Count: total,
@@ -90,22 +72,8 @@ func (p *PaymentService) GetByUUID(ctx context.Context, s string) (*dto.PaymentR
 	if err != nil {
 		return nil, err
 	}
-	return &dto.PaymentResponse{
-		UUID:          payment.UUID,
-		OrderID:       payment.OrderID,
-		Amount:        payment.Amount,
-		Status:        payment.Status.GetStatusString(),
-		PaymentLink:   payment.PaymentLink,
-		TransactionId: payment.TransactionID,
-		PaidAt:        payment.PaidAt,
-		VANumber:      payment.VANumber,
-		Bank:          payment.Bank,
-		InvoiceLink:   payment.InvoiceLink,
-		Acquirer:      payment.Acquirer,
-		Description:   payment.Description,
-		CreatedAt:     payment.CreatedAt,
-		UpdatedAt:     payment.UpdatedAt,
-	}, nil
+	response := mapPaymentResponse(*payment)
+	return &response, nil
 }
 
 func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest) (*dto.PaymentResponse, error) {
@@ -149,14 +117,8 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 		return nil, err
 	}
 
-	response = &dto.PaymentResponse{
-		UUID:        payment.UUID,
-		OrderID:     payment.OrderID,
-		Amount:      payment.Amount,
-		Status:      payment.Status.GetStatusString(),
-		PaymentLink: payment.PaymentLink,
-		Description: payment.Description,
-	}
+	mappedResponse := mapPaymentResponse(*payment)
+	response = &mappedResponse
 	return response, nil
 }
 
