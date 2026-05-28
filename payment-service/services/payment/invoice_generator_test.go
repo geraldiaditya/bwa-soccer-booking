@@ -70,6 +70,27 @@ func TestBuildInvoiceRequest(t *testing.T) {
 	}
 }
 
+func TestBuildInvoiceRequestHandlesNilOptionalFields(t *testing.T) {
+	payment := &models.Payment{
+		Amount: 150000,
+	}
+	webhook := &dto.Webhook{PaymentType: "bank_transfer"}
+	paidAt := time.Date(2026, time.October, 5, 10, 30, 0, 0, time.UTC)
+
+	got := BuildInvoiceRequest(payment, webhook, paidAt, "INV/2026-10-05/ORD/order-payment")
+
+	detail := got.Data.PaymentDetail
+	if detail.BankName != "" {
+		t.Fatalf("BankName = %q, want empty", detail.BankName)
+	}
+	if detail.VANumber != "" {
+		t.Fatalf("VANumber = %q, want empty", detail.VANumber)
+	}
+	if got.Data.Items[0].Description != "" {
+		t.Fatalf("Item description = %q, want empty", got.Data.Items[0].Description)
+	}
+}
+
 func TestBuildInvoiceNumberUsesUUIDSegments(t *testing.T) {
 	orderID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
 	paymentID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")

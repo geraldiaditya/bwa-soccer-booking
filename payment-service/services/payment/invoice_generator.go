@@ -41,15 +41,15 @@ func BuildInvoiceRequest(payment *models.Payment, webhook *dto.Webhook, paidAt t
 		InvoiceNumber: invoiceNumber,
 		Data: dto.InvoiceData{
 			PaymentDetail: dto.InvoicePaymentDetail{
-				BankName:      strings.ToUpper(*payment.Bank),
+				BankName:      strings.ToUpper(valueOrEmpty(payment.Bank)),
 				PaymentMethod: webhook.PaymentType,
-				VANumber:      *payment.VANumber,
+				VANumber:      valueOrEmpty(payment.VANumber),
 				Date:          utils.FormatIndonesianDate(paidAt),
 				IsPaid:        true,
 			},
 			Items: []dto.InvoiceItem{
 				{
-					Description: *payment.Description,
+					Description: valueOrEmpty(payment.Description),
 					Price:       total,
 				},
 			},
@@ -94,9 +94,12 @@ func (g *InvoiceGenerator) uploadToGCS(ctx context.Context, invoiceNumber string
 }
 
 func uuidSegment(id uuid.UUID) string {
-	value := id.String()
-	if len(value) < 8 {
-		return value
+	return id.String()[:8]
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
 	}
-	return value[:8]
+	return *value
 }
