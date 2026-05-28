@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	errWrap "payment-service/common/error"
@@ -12,7 +11,23 @@ import (
 	errPayment "payment-service/constants/error/payment"
 	"payment-service/domain/dto"
 	"payment-service/domain/models"
+	"strings"
 )
+
+const (
+	defaultPaymentLimit = 10
+	defaultPaymentSort  = "created_at desc"
+)
+
+var allowedPaymentSortColumns = map[string]struct{}{
+	"amount":     {},
+	"created_at": {},
+	"expired_at": {},
+	"order_id":   {},
+	"paid_at":    {},
+	"status":     {},
+	"updated_at": {},
+}
 
 type IPaymentRepository interface {
 	FindAllWithPagination(context.Context, *dto.PaymentRequestParam) ([]models.Payment, int64, error)
@@ -33,21 +48,15 @@ type PaymentRepository struct {
 func (p *PaymentRepository) FindAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) ([]models.Payment, int64, error) {
 	var (
 		fields []models.Payment
-		sort   string
 		total  int64
 	)
-	sort = "created_at desc"
-	if param.SortColumn != nil {
-		sort = fmt.Sprintf("%s %s", param.SortColumn, param.SortOrder)
-	}
 
-	limit := param.Limit
-	offset := (param.Page - 1) * limit
+	limit, offset := paymentPagination(param)
 	err := p.db.
 		WithContext(ctx).
 		Limit(limit).
 		Offset(offset).
-		Order(sort).
+		Order(paymentSort(param)).
 		Find(&fields).
 		Error
 	if err != nil {
@@ -55,13 +64,40 @@ func (p *PaymentRepository) FindAllWithPagination(ctx context.Context, param *dt
 	}
 	err = p.db.
 		WithContext(ctx).
-		Model(&fields).
+		Model(&models.Payment{}).
 		Count(&total).
 		Error
 	if err != nil {
 		return nil, 0, errWrap.WrapError(errConstant.ErrSQLError)
 	}
 	return fields, total, nil
+}
+
+func paymentPagination(param *dto.PaymentRequestParam) (int, int) {
+	page := param.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := param.Limit
+	if limit < 1 {
+		limit = defaultPaymentLimit
+	}
+	return limit, (page - 1) * limit
+}
+
+func paymentSort(param *dto.PaymentRequestParam) string {
+	if param.SortColumn == nil || param.SortOrder == nil {
+		return defaultPaymentSort
+	}
+	column := strings.ToLower(*param.SortColumn)
+	if _, ok := allowedPaymentSortColumns[column]; !ok {
+		return defaultPaymentSort
+	}
+	order := "desc"
+	if strings.EqualFold(*param.SortOrder, "asc") {
+		order = "asc"
+	}
+	return column + " " + order
 }
 
 func (p *PaymentRepository) FindByUUID(ctx context.Context, uuid string) (*models.Payment, error) {

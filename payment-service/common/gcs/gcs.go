@@ -49,13 +49,13 @@ func (g *GSClient) UploadFile(ctx context.Context, filename string, data []byte)
 	)
 	client, err := g.createClient(ctx)
 	if err != nil {
-		logrus.Error("failed to create GS client: %v", err)
+		logrus.Errorf("failed to create GS client: %v", err)
 		return "", err
 	}
 	defer func(client *storage.Client) {
 		err := client.Close()
 		if err != nil {
-			logrus.Error("failed to close GS client: %v", err)
+			logrus.Errorf("failed to close GS client: %v", err)
 			return
 		}
 	}(client)
@@ -71,17 +71,17 @@ func (g *GSClient) UploadFile(ctx context.Context, filename string, data []byte)
 	writer.ChunkSize = 0
 	_, err = io.Copy(writer, buffer)
 	if err != nil {
-		logrus.Error("failed to copy GS object: %v", err)
+		logrus.Errorf("failed to copy GS object: %v", err)
 		return "", err
 	}
 	err = writer.Close()
 	if err != nil {
-		logrus.Error("failed to close Writer: %v", err)
+		logrus.Errorf("failed to close Writer: %v", err)
 		return "", err
 	}
 	_, err = obj.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: contentType})
 	if err != nil {
-		logrus.Error("failed to update : %v", err)
+		logrus.Errorf("failed to update : %v", err)
 		return "", err
 	}
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s", g.BucketName, filename)
@@ -92,13 +92,13 @@ func (g *GSClient) createClient(ctx context.Context) (*storage.Client, error) {
 	reqBodyBytes := new(bytes.Buffer)
 	err := json.NewEncoder(reqBodyBytes).Encode(g.ServiceAccountKeyJson)
 	if err != nil {
-		logrus.Error("failed to encode service account key :%v", err)
+		logrus.Errorf("failed to encode service account key :%v", err)
 		return nil, err
 	}
 	jsonByte := reqBodyBytes.Bytes()
 	client, err := storage.NewClient(ctx, option.WithCredentialsJSON(jsonByte))
 	if err != nil {
-		logrus.Error("failed to create client :%v", err)
+		logrus.Errorf("failed to create client :%v", err)
 		return nil, err
 	}
 	return client, nil
