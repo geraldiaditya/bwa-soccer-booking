@@ -50,3 +50,12 @@ func TestProduceMessageReturnsSendError(t *testing.T) {
 		t.Fatalf("expected close without error, got %v", err)
 	}
 }
+
+func TestProduceMessageReturnsErrorWhenProducerIsNil(t *testing.T) {
+	kafka := NewKafkaProducerWithSyncProducer(nil)
+
+	err := kafka.ProduceMessage("payment-events", []byte("payload"))
+	if err == nil {
+		t.Fatal("expected error for nil producer, got nil")
+	}
+}

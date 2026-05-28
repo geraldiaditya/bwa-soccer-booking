@@ -37,7 +37,7 @@ func NewKafkaProducerWithSyncProducer(producer sarama.SyncProducer) IKafka {
 }
 
 func (k *Kafka) ProduceMessage(topic string, data []byte) error {
-	if k == nil || k.producer == nil {
+	if k.producer == nil {
 		return fmt.Errorf("kafka producer is not initialized")
 	}
 
@@ -56,7 +56,7 @@ func (k *Kafka) ProduceMessage(topic string, data []byte) error {
 }
 
 func (k *Kafka) Close() error {
-	if k == nil || k.producer == nil {
+	if k.producer == nil {
 		return nil
 	}
 
