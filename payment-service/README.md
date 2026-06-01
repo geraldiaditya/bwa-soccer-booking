@@ -1,77 +1,153 @@
 # Payment Service
 
-Handles payment processing via Midtrans. Consumes order events from Kafka to create payment transactions, serves Midtrans webhook callbacks, and publishes payment status events back to Kafka.
+Payment Service owns payment creation, payment status reads, Midtrans webhook handling, invoice upload, and payment status publication for the BWA Soccer Booking system.
 
-**Port:** `8004`
+**Default port:** `8004`
 
-## Endpoints
+## Responsibility
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/v1/payments/callback` | Midtrans | Midtrans webhook callback |
-| GET | `/api/v1/payments/:order_uuid` | JWT | Get payment status |
+- Create Midtrans Snap payment links for soccer field booking orders.
+- Persist payment records and payment history with GORM/PostgreSQL.
+- Receive Midtrans status webhooks and update local payment status.
+- Generate paid invoices for settled payments and upload the PDF to Google Cloud Storage.
+- Publish payment status events to Kafka so other services can react to pending, settled, or expired payments.
 
-## Event Flow
+## Architecture
 
 ```
-order-service  ──[order.created]──►  Kafka  ──►  payment-service  ──►  Midtrans
-Midtrans  ──►  payment-service  ──[payment.callback]──►  Kafka  ──►  order-service
+HTTP clients
+  |
+  v
+Gin routes/controllers  ->  payment service
+                              |
+                              +-> payment repositories -> PostgreSQL
+                              +-> Midtrans Snap client
+                              +-> GCS invoice storage
+                              +-> Kafka producer
 ```
 
-## Directory Structure
+Key directories:
 
 ```
 payment-service/
-├── cmd/              # CLI entrypoint (serve, migrate, seed)
-├── clients/          # HTTP client for user-service
-├── config/           # App config + DB + Kafka + Midtrans config
-├── controllers/
-│   ├── http/         # HTTP handlers
-│   └── kafka/        # Kafka consumer handlers
-├── services/         # Business logic
-├── repositories/     # Data access (GORM)
-├── domain/
-│   ├── models/       # GORM models (Payment)
-│   └── dto/          # Request/response structs
-├── middlewares/      # JWT auth, RBAC, HMAC signature
-├── routes/           # Route definitions
-├── templates/        # HTML email/notification templates
-└── docs/             # Generated Swagger docs
+|-- cmd/                  # Cobra serve command entrypoint
+|-- clients/              # Midtrans and internal user-service clients
+|-- common/               # Shared response, utility, PDF, and GCS helpers
+|-- config/               # JSON/Consul config binding and database setup
+|-- controllers/http/     # Gin handlers
+|-- controllers/kafka/    # Kafka producer wrapper
+|-- domain/               # DTOs and GORM models
+|-- middlewares/          # Panic recovery, rate limiting, auth, role checks
+|-- repositories/         # Payment and payment-history data access
+|-- routes/               # /api/v1/payment route registration
+|-- services/             # Payment business logic
+|-- templates/            # Invoice HTML template
 ```
 
-## Setup
+## HTTP API
+
+Routes are mounted under `/api/v1/payment`.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/payment/webhook` | Midtrans callback payload | Update payment status from Midtrans webhook |
+| `GET` | `/api/v1/payment` | JWT + service signature, admin/customer | List payments with pagination |
+| `GET` | `/api/v1/payment/:uuid` | JWT + service signature, admin/customer | Get one payment by payment UUID |
+| `POST` | `/api/v1/payment` | JWT + service signature, customer | Create a payment link |
+
+There is no generated Swagger/OpenAPI bundle in the current repository. Use the route/controller DTOs as the source of truth until API docs are generated.
+
+## Auth And Signature
+
+Authenticated routes require:
+
+- `Authorization: Bearer <token>`
+- `x-service-name`
+- `x-request-at`
+- `x-apikey`
+
+`x-apikey` is validated as:
+
+```text
+sha256("<x-service-name>:<signatureKey>:<x-request-at>")
+```
+
+After signature validation, the middleware calls user-service with the bearer token and checks the allowed role for the route. The Midtrans webhook endpoint is intentionally outside the JWT middleware because it is called by Midtrans.
+
+## Create Payment Flow
+
+1. A customer calls `POST /api/v1/payment` with an order ID, expiration time, amount, customer details, and item details.
+2. The service rejects requests whose `expiredAt` is not in the future.
+3. The Midtrans client creates a Snap payment transaction and returns a redirect URL.
+4. The payment repository persists a payment with `initial` status and the redirect URL.
+5. The payment-history repository records the initial status.
+6. The response returns the payment UUID, order ID, amount, status, payment link, and description.
+
+The service wraps database writes in a GORM transaction. Midtrans is called before local persistence, so a local database failure can leave a Midtrans transaction that must be reconciled operationally.
+
+## Midtrans Webhook Flow
+
+1. Midtrans calls `POST /api/v1/payment/webhook`.
+2. The service finds the payment by `order_id`.
+3. It maps `transaction_status` to the internal status enum and updates transaction ID, VA number, bank, acquirer, and paid time.
+4. It writes a payment-history row for the new status.
+5. For `settlement`, it generates an invoice PDF from `templates/invoice.html`, uploads it to GCS, and stores the invoice URL on the payment.
+6. After the database transaction succeeds, it publishes a Kafka status event.
+
+Supported status names in code are `pending`, `settlement`, and `expire`.
+
+## Kafka Event Flow
+
+Webhook processing publishes a JSON message through the configured Kafka producer. The topic comes from `config.json` at `kafka.topic`.
+
+The event name is the uppercase transaction status (`PENDING`, `SETTLEMENT`, or `EXPIRE`). The body includes order ID, payment ID, status, paid time, and expiration time.
+
+The current codebase only contains a Kafka producer in payment-service. It does not contain a Kafka consumer that creates payments from order events.
+
+## Local Setup
+
+From this directory:
 
 ```bash
-cp config.json.example config.json   # fill in DB, Kafka, and Midtrans credentials
-go mod tidy
+cp config.json.example config.json
+go mod download
 ```
 
-## Run
+Fill `config.json` with local PostgreSQL, Kafka, Midtrans, GCS, user-service, and signature settings. Do not commit real credentials.
+
+Run the service:
 
 ```bash
-make watch-prepare   # install Air (first time only)
-make watch           # run with hot reload
+go run .
 ```
 
-## Docker
+Or use hot reload:
 
 ```bash
-docker-compose up -d --build
+make watch-prepare
+make watch
 ```
 
-## Database
+The Cobra command currently serves the HTTP API and runs `AutoMigrate` for payment tables during startup. Separate `migrate` and `seed` subcommands are not present.
+
+## Build And Test
 
 ```bash
-./payment-service migrate
-./payment-service seed
+go test ./... -cover
+go build ./...
 ```
 
-## Build
+The Makefile also provides:
 
 ```bash
 make build
+make docker-compose
 ```
 
-## API Docs
+## Design Decisions And Tradeoffs
 
-Swagger UI: http://localhost:8004/swagger/index.html
+- The service keeps payment state local instead of relying only on Midtrans, which gives the platform fast status reads and an audit trail.
+- Payment history is append-only at the service layer so webhook status changes can be reviewed later.
+- Invoice generation and upload happen inside webhook processing, which keeps the settlement flow simple but makes webhook latency depend on PDF rendering and GCS availability.
+- Kafka publication happens after the database transaction succeeds, so local state is not rolled back if Kafka publishing fails. A retry/outbox mechanism would make this more reliable.
+- The service currently accepts the webhook route without JWT because Midtrans cannot call with the platform's internal user token. Production deployments should validate Midtrans signatures before trusting the payload.
