@@ -63,7 +63,13 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	kafka := kafkaClient.NewKafkaRegistry(config.Config.Kafka.Brokers)
+	kafka, err := kafkaClient.NewKafkaRegistry(config.Config.Kafka.Brokers, config.Config.Kafka.MaxRetry)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = kafka.Close()
+	}()
 	midtrans := midtransClient.NewMidTransClient(
 		config.Config.Midtrans.ServerKey,
 		config.Config.Midtrans.IsProduction,

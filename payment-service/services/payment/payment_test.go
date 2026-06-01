@@ -145,6 +145,10 @@ func (f *fakeKafkaProducer) ProduceMessage(topic string, data []byte) error {
 	return f.err
 }
 
+func (f *fakeKafkaProducer) Close() error {
+	return nil
+}
+
 func TestPaymentServiceCreate(t *testing.T) {
 	orderID := uuid.New()
 	description := "field booking"

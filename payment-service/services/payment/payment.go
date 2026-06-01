@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	clients "payment-service/clients/midtrans"
 	"payment-service/common/gcs"
 	"payment-service/common/utils"
@@ -15,6 +16,8 @@ import (
 	"payment-service/repositories"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type IPaymentService interface {
@@ -43,6 +46,10 @@ type PaymentService struct {
 	kafka            kafka.IKafkaRegistry
 	midtrans         clients.IMidTransClient
 	invoiceGenerator *InvoiceGenerator
+}
+
+var marshalKafkaMessage = func(message dto.KafkaMessage) ([]byte, error) {
+	return json.Marshal(message)
 }
 
 func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) (*utils.PaginationResult, error) {
@@ -195,10 +202,14 @@ func (p *PaymentService) produceToKafka(
 		MetaData: metadata,
 	}
 	topic := config2.Config.Kafka.Topic
-	kafkaMessageJson, _ := json.Marshal(kafkaMessage)
-	err := p.kafka.GetKafkaProducer().ProduceMessage(topic, kafkaMessageJson)
+	kafkaMessageJson, err := marshalKafkaMessage(kafkaMessage)
 	if err != nil {
-		return err
+		logrus.WithError(err).Error("failed to serialize payment kafka event")
+		return fmt.Errorf("serialize payment kafka event: %w", err)
+	}
+	if err := p.kafka.GetKafkaProducer().ProduceMessage(topic, kafkaMessageJson); err != nil {
+		logrus.WithError(err).WithField("topic", topic).Error("failed to publish payment kafka event")
+		return fmt.Errorf("publish payment kafka event: %w", err)
 	}
 	return nil
 }
@@ -263,6 +274,9 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 	if err != nil {
 		return err
 	}
+	// Kafka publish happens after the database transaction commits. If this
+	// fails, payment state remains updated and callers receive an explicit error
+	// so the webhook can be retried by the sender.
 	err = p.produceToKafka(webhook, paymentAfterUpdate, paidAt)
 	if err != nil {
 		return err
