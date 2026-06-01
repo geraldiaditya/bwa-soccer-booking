@@ -5,29 +5,46 @@ import (
 	"time"
 )
 
+func IndonesianMonthName(month time.Month) string {
+	months := map[time.Month]string{
+		time.January:   "Januari",
+		time.February:  "Februari",
+		time.March:     "Maret",
+		time.April:     "April",
+		time.May:       "Mei",
+		time.June:      "Juni",
+		time.July:      "Juli",
+		time.August:    "Agustus",
+		time.September: "September",
+		time.October:   "Oktober",
+		time.November:  "November",
+		time.December:  "Desember",
+	}
+	return months[month]
+}
+
+func FormatIndonesianDate(date time.Time) string {
+	return fmt.Sprintf("%02d %s %d", date.Day(), IndonesianMonthName(date.Month()), date.Year())
+}
+
 func ConvertMonthName(inputDate string) string {
 	date, err := time.Parse(time.DateOnly, inputDate)
 	if err != nil {
 		return ""
 	}
-	indonesiaMonth := map[string]string{
-		"Jan": "Jan",
-		"Feb": "Feb",
-		"Mar": "Mar",
-		"Apr": "Apr",
-		"May": "Mei",
-		"Jun": "Jun",
-		"Jul": "Jul",
-		"Aug": "Agu",
-		"Sep": "Sep",
-		"Oct": "Okt",
-		"Nov": "Nov",
-		"Dec": "Des",
+	months := map[time.Month]string{
+		time.January:   "Jan",
+		time.February:  "Feb",
+		time.March:     "Mar",
+		time.April:     "Apr",
+		time.May:       "Mei",
+		time.June:      "Jun",
+		time.July:      "Jul",
+		time.August:    "Agu",
+		time.September: "Sep",
+		time.October:   "Okt",
+		time.November:  "Nov",
+		time.December:  "Des",
 	}
-	formattedDate := date.Format("02 Jan")
-	day := formattedDate[:3]
-	month := formattedDate[3:]
-	formattedDate = fmt.Sprintf("%s %s", day, indonesiaMonth[month])
-	return formattedDate
-
+	return fmt.Sprintf("%02d %s", date.Day(), months[date.Month()])
 }
