@@ -5,12 +5,7 @@ import (
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-	"math/rand"
-	"os"
 	clients "payment-service/clients/midtrans"
 	"payment-service/common/gcs"
 	"payment-service/common/utils"
@@ -23,6 +18,9 @@ import (
 	"payment-service/repositories"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 type IPaymentService interface {
@@ -39,47 +37,30 @@ func NewPaymentService(
 	midtrans clients.IMidTransClient,
 ) IPaymentService {
 	return &PaymentService{
-		repository: repository,
-		gcs:        gcs,
-		kafka:      kafka,
-		midtrans:   midtrans,
+		repository:       repository,
+		kafka:            kafka,
+		midtrans:         midtrans,
+		invoiceGenerator: NewInvoiceGenerator(gcs),
 	}
 }
 
 type PaymentService struct {
-	repository repositories.IRepositoryRegistry
-	gcs        gcs.IGSClient
-	kafka      kafka.IKafkaRegistry
-	midtrans   clients.IMidTransClient
+	repository       repositories.IRepositoryRegistry
+	kafka            kafka.IKafkaRegistry
+	midtrans         clients.IMidTransClient
+	invoiceGenerator *InvoiceGenerator
 }
 
-var generatePDFFromHTML = utils.GeneratePDFFromHTML
-var readFile = os.ReadFile
+var marshalKafkaMessage = func(message dto.KafkaMessage) ([]byte, error) {
+	return json.Marshal(message)
+}
 
 func (p *PaymentService) GetAllWithPagination(ctx context.Context, param *dto.PaymentRequestParam) (*utils.PaginationResult, error) {
 	payments, total, err := p.repository.GetPayment().FindAllWithPagination(ctx, param)
 	if err != nil {
 		return nil, err
 	}
-	paymentResults := make([]dto.PaymentResponse, 0, len(payments))
-	for _, payment := range payments {
-		paymentResults = append(paymentResults, dto.PaymentResponse{
-			UUID:          payment.UUID,
-			OrderID:       payment.OrderID,
-			Amount:        payment.Amount,
-			Status:        payment.Status.GetStatusString(),
-			PaymentLink:   payment.PaymentLink,
-			TransactionId: payment.TransactionID,
-			PaidAt:        payment.PaidAt,
-			VANumber:      payment.VANumber,
-			Bank:          payment.Bank,
-			InvoiceLink:   payment.InvoiceLink,
-			Acquirer:      payment.Acquirer,
-			Description:   payment.Description,
-			CreatedAt:     payment.CreatedAt,
-			UpdatedAt:     payment.UpdatedAt,
-		})
-	}
+	paymentResults := mapPaymentResponses(payments)
 
 	paginationParam := utils.PaginationParam{
 		Count: total,
@@ -96,22 +77,8 @@ func (p *PaymentService) GetByUUID(ctx context.Context, s string) (*dto.PaymentR
 	if err != nil {
 		return nil, err
 	}
-	return &dto.PaymentResponse{
-		UUID:          payment.UUID,
-		OrderID:       payment.OrderID,
-		Amount:        payment.Amount,
-		Status:        payment.Status.GetStatusString(),
-		PaymentLink:   payment.PaymentLink,
-		TransactionId: payment.TransactionID,
-		PaidAt:        payment.PaidAt,
-		VANumber:      payment.VANumber,
-		Bank:          payment.Bank,
-		InvoiceLink:   payment.InvoiceLink,
-		Acquirer:      payment.Acquirer,
-		Description:   payment.Description,
-		CreatedAt:     payment.CreatedAt,
-		UpdatedAt:     payment.UpdatedAt,
-	}, nil
+	response := mapPaymentResponse(payment)
+	return &response, nil
 }
 
 func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest) (*dto.PaymentResponse, error) {
@@ -122,7 +89,7 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 		midtrans   *clients.MidTransData
 	)
 
-	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
+	err = p.repository.WithTransaction(ctx, func(repository repositories.IRepositoryRegistry) error {
 		if !request.ExpiredAt.After(time.Now()) {
 			return errPayment.ErrExpireAtInvalid
 		}
@@ -137,12 +104,12 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 			ExpiredAt:   request.ExpiredAt,
 			PaymentLink: midtrans.RedirectURL,
 		}
-		payment, txErr = p.repository.GetPayment().Create(ctx, tx, paymentRequest)
+		payment, txErr = repository.GetPayment().Create(ctx, paymentRequest)
 		if txErr != nil {
 			return txErr
 		}
 
-		txErr = p.repository.GetPaymentHistory().Create(ctx, tx, &dto.PaymentHistoryRequest{
+		txErr = repository.GetPaymentHistory().Create(ctx, &dto.PaymentHistoryRequest{
 			PaymentId: payment.ID,
 			Status:    payment.Status.GetStatusString(),
 		})
@@ -155,74 +122,9 @@ func (p *PaymentService) Create(ctx context.Context, request *dto.PaymentRequest
 		return nil, err
 	}
 
-	response = &dto.PaymentResponse{
-		UUID:        payment.UUID,
-		OrderID:     payment.OrderID,
-		Amount:      payment.Amount,
-		Status:      payment.Status.GetStatusString(),
-		PaymentLink: payment.PaymentLink,
-		Description: payment.Description,
-	}
+	mappedResponse := mapCreatedPaymentResponse(payment)
+	response = &mappedResponse
 	return response, nil
-}
-
-func (p *PaymentService) convertToIndonesiaMonth(englishMonth string) string {
-	monthMap := map[string]string{
-		"January":  "Januari",
-		"February": "Februari",
-		"March":    "Maret",
-		"April":    "April",
-
-		"May":       "May",
-		"June":      "Juni",
-		"July":      "Juli",
-		"August":    "Agustus",
-		"September": "September",
-		"October":   "OKtober",
-		"November":  "November",
-		"December":  "Desember",
-	}
-
-	indonesiaMonth, ok := monthMap[englishMonth]
-	if !ok {
-		return errors.New("month not found").Error()
-	}
-	return indonesiaMonth
-}
-
-func (p *PaymentService) generatePDF(req *dto.InvoiceRequest) ([]byte, error) {
-	htmlTemplatePath := "templates/invoice.html"
-	htmlTemplate, err := readFile(htmlTemplatePath)
-	if err != nil {
-		return nil, err
-	}
-	var data map[string]interface{}
-	jsonData, _ := json.Marshal(req)
-	err = json.Unmarshal(jsonData, &data)
-	if err != nil {
-		return nil, err
-	}
-	pdf, err := generatePDFFromHTML(string(htmlTemplate), data)
-	if err != nil {
-		return nil, err
-	}
-	return pdf, nil
-}
-
-func (p *PaymentService) uploadToGCS(ctx context.Context, invoiceNumber string, pdf []byte) (string, error) {
-	invoiceNumberReplace := strings.ToLower(strings.ReplaceAll(invoiceNumber, "/", "-"))
-	filename := fmt.Sprintf("%s.pdf", invoiceNumberReplace)
-	url, err := p.gcs.UploadFile(ctx, filename, pdf)
-	if err != nil {
-		return "", err
-	}
-	return url, nil
-}
-
-func (p *PaymentService) randomNumber() int {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	number := random.Intn(900000) + 100000
-	return number
 }
 
 func (p *PaymentService) mapTransactionStatusToEvent(status constants.PaymentStatusString) string {
@@ -320,36 +222,6 @@ func (p *PaymentService) webhookVirtualAccount(webhook *dto.Webhook) (*string, *
 	return &vaNumber, &bank
 }
 
-func (p *PaymentService) invoicePaymentDetail(payment *models.Payment, webhook *dto.Webhook, paidAt *time.Time) dto.InvoicePaymentDetail {
-	var bankName, vaNumber, paidDate string
-	if payment.Bank != nil {
-		bankName = strings.ToUpper(*payment.Bank)
-	}
-	if payment.VANumber != nil {
-		vaNumber = *payment.VANumber
-	}
-	if paidAt != nil {
-		paidDay := paidAt.Format("02")
-		paidMonth := p.convertToIndonesiaMonth(paidAt.Format("January"))
-		paidYear := paidAt.Format("2006")
-		paidDate = fmt.Sprintf("%s %s %s", paidDay, paidMonth, paidYear)
-	}
-	return dto.InvoicePaymentDetail{
-		BankName:      bankName,
-		PaymentMethod: webhook.PaymentType,
-		VANumber:      vaNumber,
-		Date:          paidDate,
-		IsPaid:        true,
-	}
-}
-
-func (p *PaymentService) paymentDescription(payment *models.Payment) string {
-	if payment == nil || payment.Description == nil {
-		return ""
-	}
-	return *payment.Description
-}
-
 func (p *PaymentService) produceToKafka(
 	request *dto.Webhook,
 	payment *models.Payment,
@@ -381,10 +253,14 @@ func (p *PaymentService) produceToKafka(
 		MetaData: metadata,
 	}
 	topic := config2.Config.Kafka.Topic
-	kafkaMessageJson, _ := json.Marshal(kafkaMessage)
-	err := p.kafka.GetKafkaProducer().ProduceMessage(topic, kafkaMessageJson)
+	kafkaMessageJson, err := marshalKafkaMessage(kafkaMessage)
 	if err != nil {
-		return err
+		logrus.WithError(err).Error("failed to serialize payment kafka event")
+		return fmt.Errorf("serialize payment kafka event: %w", err)
+	}
+	if err := p.kafka.GetKafkaProducer().ProduceMessage(topic, kafkaMessageJson); err != nil {
+		logrus.WithError(err).WithField("topic", topic).Error("failed to publish payment kafka event")
+		return fmt.Errorf("publish payment kafka event: %w", err)
 	}
 	return nil
 }
@@ -396,7 +272,6 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		paymentAfterUpdate  *models.Payment
 		paidAt              *time.Time
 		invoiceLink         string
-		pdf                 []byte
 		updated             bool
 	)
 
@@ -407,8 +282,8 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		return err
 	}
 
-	err = p.repository.GetTx().Transaction(func(tx *gorm.DB) error {
-		paymentBeforeUpdate, txErr = p.repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
+	err = p.repository.WithTransaction(ctx, func(repository repositories.IRepositoryRegistry) error {
+		paymentBeforeUpdate, txErr = repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
 		if txErr != nil {
 			return txErr
 		}
@@ -427,7 +302,7 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 			paidAt = &now
 		}
 		vaNumber, bank := p.webhookVirtualAccount(webhook)
-		_, txErr = p.repository.GetPayment().Update(ctx, tx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
+		_, txErr = repository.GetPayment().Update(ctx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
 			TransactionId: &webhook.TransactionId,
 			Status:        &status,
 			PaidAt:        paidAt,
@@ -447,7 +322,8 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		paymentAfterUpdate.VANumber = vaNumber
 		paymentAfterUpdate.Bank = bank
 		paymentAfterUpdate.Acquirer = &webhook.Acquirer
-		txErr = p.repository.GetPaymentHistory().Create(ctx, tx, &dto.PaymentHistoryRequest{
+
+		txErr = repository.GetPaymentHistory().Create(ctx, &dto.PaymentHistoryRequest{
 			PaymentId: paymentAfterUpdate.ID,
 			Status:    paymentAfterUpdate.Status.GetStatusString(),
 		})
@@ -456,30 +332,13 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 		}
 
 		if webhook.TransactionStatus == constants.SettlementString {
-			invoiceNumber := fmt.Sprintf("INV/%s/ORD/%d", time.Now().Format(time.DateOnly), p.randomNumber())
-			total := utils.RupiahFormat(&paymentAfterUpdate.Amount)
-			invoiceRequest := &dto.InvoiceRequest{
-				InvoiceNumber: invoiceNumber,
-				Data: dto.InvoiceData{
-					PaymentDetail: p.invoicePaymentDetail(paymentAfterUpdate, webhook, paidAt),
-					Items: []dto.InvoiceItem{
-						{
-							Description: p.paymentDescription(paymentAfterUpdate),
-							Price:       total,
-						},
-					},
-					Total: total,
-				},
-			}
-			pdf, txErr = p.generatePDF(invoiceRequest)
+			invoiceNumber := BuildInvoiceNumber(time.Now(), paymentAfterUpdate.OrderID, paymentAfterUpdate.UUID)
+			invoiceRequest := BuildInvoiceRequest(paymentAfterUpdate, webhook, *paidAt, invoiceNumber)
+			invoiceLink, txErr = p.invoiceGenerator.GenerateAndUpload(ctx, invoiceRequest)
 			if txErr != nil {
 				return txErr
 			}
-			invoiceLink, txErr = p.uploadToGCS(ctx, invoiceNumber, pdf)
-			if txErr != nil {
-				return txErr
-			}
-			_, txErr = p.repository.GetPayment().Update(ctx, tx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
+			_, txErr = repository.GetPayment().Update(ctx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
 				InvoiceLink: &invoiceLink,
 			})
 			if txErr != nil {
@@ -495,6 +354,9 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 	if !updated {
 		return nil
 	}
+	// Kafka publish happens after the database transaction commits. If this
+	// fails, payment state remains updated and callers receive an explicit error
+	// so the webhook can be retried by the sender.
 	err = p.produceToKafka(webhook, paymentAfterUpdate, paidAt)
 	if err != nil {
 		return err
