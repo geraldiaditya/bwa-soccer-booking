@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	clients "payment-service/clients/midtrans"
@@ -17,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -137,10 +140,96 @@ func (p *PaymentService) mapTransactionStatusToEvent(status constants.PaymentSta
 	return paymentStatus
 }
 
+func (p *PaymentService) validateWebhookPayload(webhook *dto.Webhook) error {
+	if webhook == nil {
+		return errPayment.ErrWebhookInvalidPayload
+	}
+	if webhook.OrderId == uuid.Nil ||
+		webhook.TransactionId == "" ||
+		webhook.StatusCode == "" ||
+		webhook.GrossAmount == "" ||
+		webhook.SignatureKey == "" {
+		return errPayment.ErrWebhookInvalidPayload
+	}
+	if !p.isSupportedTransactionStatus(webhook.TransactionStatus) {
+		return errPayment.ErrWebhookInvalidPayload
+	}
+	return nil
+}
+
+func (p *PaymentService) isSupportedTransactionStatus(status constants.PaymentStatusString) bool {
+	switch status {
+	case constants.PendingString, constants.SettlementString, constants.ExpireString:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *PaymentService) verifyWebhookSignature(webhook *dto.Webhook) error {
+	serverKey := config2.Config.Midtrans.ServerKey
+	if serverKey == "" {
+		return errPayment.ErrWebhookInvalidSignature
+	}
+	expected := p.webhookSignature(webhook.OrderId.String(), webhook.StatusCode, webhook.GrossAmount, serverKey)
+	if subtle.ConstantTimeCompare([]byte(webhook.SignatureKey), []byte(expected)) != 1 {
+		return errPayment.ErrWebhookInvalidSignature
+	}
+	return nil
+}
+
+func (p *PaymentService) webhookSignature(orderID, statusCode, grossAmount, serverKey string) string {
+	signaturePayload := orderID + statusCode + grossAmount + serverKey
+	signature := sha512.Sum512([]byte(signaturePayload))
+	return fmt.Sprintf("%x", signature)
+}
+
+func (p *PaymentService) isDuplicateStatus(payment *models.Payment, next constants.PaymentStatus) bool {
+	return payment != nil && payment.Status != nil && *payment.Status == next
+}
+
+func (p *PaymentService) validateStatusTransition(payment *models.Payment, next constants.PaymentStatus) error {
+	if payment == nil || payment.Status == nil {
+		return errPayment.ErrWebhookInvalidPayload
+	}
+	if *payment.Status == next {
+		return nil
+	}
+	switch *payment.Status {
+	case constants.Initial:
+		if next == constants.Pending || next == constants.Settlement || next == constants.Expire {
+			return nil
+		}
+	case constants.Pending:
+		if next == constants.Settlement || next == constants.Expire {
+			return nil
+		}
+	case constants.Settlement, constants.Expire:
+		return errPayment.ErrWebhookInvalidTransition
+	}
+	return errPayment.ErrWebhookInvalidTransition
+}
+
+func (p *PaymentService) webhookVirtualAccount(webhook *dto.Webhook) (*string, *string) {
+	if webhook == nil || len(webhook.VANumbers) == 0 {
+		return nil, nil
+	}
+	vaNumber := webhook.VANumbers[0].VANumber
+	bank := webhook.VANumbers[0].Bank
+	if vaNumber == "" && bank == "" {
+		return nil, nil
+	}
+	return &vaNumber, &bank
+}
+
 func (p *PaymentService) produceToKafka(
 	request *dto.Webhook,
 	payment *models.Payment,
 	paidAt *time.Time) error {
+	var expiredAt time.Time
+	if payment.ExpiredAt != nil {
+		expiredAt = *payment.ExpiredAt
+	}
 	event := dto.KafkaEvent{
 		Name: p.mapTransactionStatusToEvent(request.TransactionStatus),
 	}
@@ -155,7 +244,7 @@ func (p *PaymentService) produceToKafka(
 			PaymentID: payment.UUID,
 			Status:    request.TransactionStatus.String(),
 			PaidAt:    paidAt,
-			ExpiredAt: *payment.ExpiredAt,
+			ExpiredAt: expiredAt,
 		},
 	}
 	kafkaMessage := dto.KafkaMessage{
@@ -178,44 +267,69 @@ func (p *PaymentService) produceToKafka(
 
 func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) error {
 	var (
-		txErr, err         error
-		paymentAfterUpdate *models.Payment
-		paidAt             *time.Time
-		invoiceLink        string
+		txErr, err          error
+		paymentBeforeUpdate *models.Payment
+		paymentAfterUpdate  *models.Payment
+		paidAt              *time.Time
+		invoiceLink         string
+		updated             bool
 	)
 
+	if err = p.validateWebhookPayload(webhook); err != nil {
+		return err
+	}
+	if err = p.verifyWebhookSignature(webhook); err != nil {
+		return err
+	}
+
 	err = p.repository.WithTransaction(ctx, func(repository repositories.IRepositoryRegistry) error {
-		_, txErr = repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
+		paymentBeforeUpdate, txErr = repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
 		if txErr != nil {
 			return txErr
+		}
+
+		status := webhook.TransactionStatus.GetStatusInt()
+		if txErr = p.validateStatusTransition(paymentBeforeUpdate, status); txErr != nil {
+			return txErr
+		}
+		if p.isDuplicateStatus(paymentBeforeUpdate, status) {
+			paymentAfterUpdate = paymentBeforeUpdate
+			return nil
 		}
 
 		if webhook.TransactionStatus == constants.SettlementString {
 			now := time.Now()
 			paidAt = &now
 		}
-		status := webhook.TransactionStatus.GetStatusInt()
-		vaNumber := webhook.VANumbers[0].VANumber
-		bank := webhook.VANumbers[0].Bank
+		vaNumber, bank := p.webhookVirtualAccount(webhook)
 		_, txErr = repository.GetPayment().Update(ctx, webhook.OrderId.String(), &dto.UpdatePaymentRequest{
 			TransactionId: &webhook.TransactionId,
 			Status:        &status,
 			PaidAt:        paidAt,
-			VANumber:      &vaNumber,
-			Bank:          &bank,
+			VANumber:      vaNumber,
+			Bank:          bank,
 			Acquirer:      webhook.Acquirer,
 		})
 		if txErr != nil {
 			return txErr
 		}
-		paymentAfterUpdate, txErr = repository.GetPayment().FindByOrderID(ctx, webhook.OrderId.String())
-		if txErr != nil {
-			return txErr
-		}
+		updated = true
+		afterUpdate := *paymentBeforeUpdate
+		paymentAfterUpdate = &afterUpdate
+		paymentAfterUpdate.TransactionID = &webhook.TransactionId
+		paymentAfterUpdate.Status = &status
+		paymentAfterUpdate.PaidAt = paidAt
+		paymentAfterUpdate.VANumber = vaNumber
+		paymentAfterUpdate.Bank = bank
+		paymentAfterUpdate.Acquirer = &webhook.Acquirer
+
 		txErr = repository.GetPaymentHistory().Create(ctx, &dto.PaymentHistoryRequest{
 			PaymentId: paymentAfterUpdate.ID,
 			Status:    paymentAfterUpdate.Status.GetStatusString(),
 		})
+		if txErr != nil {
+			return txErr
+		}
 
 		if webhook.TransactionStatus == constants.SettlementString {
 			invoiceNumber := BuildInvoiceNumber(time.Now(), paymentAfterUpdate.OrderID, paymentAfterUpdate.UUID)
@@ -230,11 +344,15 @@ func (p *PaymentService) Webhook(ctx context.Context, webhook *dto.Webhook) erro
 			if txErr != nil {
 				return txErr
 			}
+			paymentAfterUpdate.InvoiceLink = &invoiceLink
 		}
 		return nil
 	})
 	if err != nil {
 		return err
+	}
+	if !updated {
+		return nil
 	}
 	// Kafka publish happens after the database transaction commits. If this
 	// fails, payment state remains updated and callers receive an explicit error

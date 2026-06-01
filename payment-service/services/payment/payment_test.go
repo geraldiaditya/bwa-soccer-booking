@@ -12,6 +12,7 @@ import (
 
 	midtrans "payment-service/clients/midtrans"
 	"payment-service/common/gcs"
+	config2 "payment-service/config"
 	"payment-service/constants"
 	errPayment "payment-service/constants/error/payment"
 	"payment-service/controllers/kafka"
@@ -448,17 +449,28 @@ func TestPaymentServiceWebhook(t *testing.T) {
 				return []byte("pdf"), nil
 			}
 
-			err := service.Webhook(context.Background(), &dto.Webhook{
+			config2.Config.Midtrans.ServerKey = "server-key"
+			webhook := &dto.Webhook{
 				OrderId:           orderID,
 				TransactionStatus: tt.status,
 				TransactionId:     "trx-123",
+				StatusCode:        "200",
+				GrossAmount:       "275000.00",
 				VANumbers: []dto.VANumber{{
 					VANumber: "123456",
 					Bank:     "bca",
 				}},
 				PaymentType: "bank_transfer",
 				Acquirer:    "bca",
-			})
+			}
+			webhook.SignatureKey = service.webhookSignature(
+				webhook.OrderId.String(),
+				webhook.StatusCode,
+				webhook.GrossAmount,
+				config2.Config.Midtrans.ServerKey,
+			)
+
+			err := service.Webhook(context.Background(), webhook)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("expected error %v, got %v", tt.wantErr, err)
